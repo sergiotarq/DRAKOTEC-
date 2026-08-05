@@ -9,6 +9,11 @@ const mongoose = require('mongoose');
 // Cargar Modelos Mongoose
 const Producto = require('./models/Producto');
 const Orden = require('./models/Orden');
+const Reserva = require('./models/Reserva');
+const Notificacion = require('./models/Notificacion');
+const Movimiento = require('./models/Movimiento');
+
+
 
 const app = express();
 const PORT = process.env.PORT || 5500;
@@ -126,11 +131,11 @@ app.get('/api/productos', async (req, res) => {
 
 // Crear un producto (TEC-U01 - Rol: Admin)
 app.post('/api/productos', (req, res, next) => {
-    // Usar multer para subir la imagen principal
-    upload.single('imagen')(req, res, function (err) {
+    // Usar multer para subir las imágenes (máximo 5)
+    upload.array('imagenes', 5)(req, res, function (err) {
         if (err instanceof multer.MulterError) {
             if (err.code === 'LIMIT_FILE_SIZE') {
-                return res.status(400).json({ error: 'La imagen excede el límite de 5MB' });
+                return res.status(400).json({ error: 'Una de las imágenes excede el límite de 5MB' });
             }
             return res.status(400).json({ error: err.message });
         } else if (err) {
@@ -151,12 +156,14 @@ app.post('/api/productos', (req, res, next) => {
         if (isNaN(parsedStock) || parsedStock < 0) errors.push("El stock debe ser un entero mayor o igual a 0");
         if (!category) errors.push("La categoría es requerida");
         if (!specs || specs.trim() === "") errors.push("La ficha técnica es requerida");
-        if (!req.file) errors.push("La imagen principal del producto es obligatoria");
+        if (!req.files || req.files.length === 0) errors.push("Debe subir al menos una imagen para el producto");
 
         if (errors.length > 0) {
-            // Si hay errores, borrar el archivo subido si existiese
-            if (req.file) {
-                await fs.unlink(req.file.path).catch(() => {});
+            // Si hay errores, borrar archivos subidos
+            if (req.files) {
+                for (const file of req.files) {
+                    await fs.unlink(file.path).catch(() => {});
+                }
             }
             return res.status(400).json({ errors });
         }
@@ -165,6 +172,8 @@ app.post('/api/productos', (req, res, next) => {
         const maxProduct = await Producto.findOne().sort({ id: -1 });
         const nextId = maxProduct ? maxProduct.id + 1 : 1;
 
+        const imagePaths = req.files.map(file => `/uploads/${path.basename(file.path)}`);
+
         const nuevoProducto = new Producto({
             id: nextId,
             name: name.trim(),
@@ -172,7 +181,8 @@ app.post('/api/productos', (req, res, next) => {
             price: parsedPrice,
             stock: parsedStock,
             specs: specs.trim(),
-            imagePath: `/uploads/${path.basename(req.file.path)}`
+            imagePath: imagePaths[0],
+            images: imagePaths
         });
 
         await nuevoProducto.save();
@@ -180,8 +190,10 @@ app.post('/api/productos', (req, res, next) => {
         res.status(201).json({ message: 'Producto publicado con éxito', producto: nuevoProducto });
     } catch (err) {
         console.error(err);
-        if (req.file) {
-            await fs.unlink(req.file.path).catch(() => {});
+        if (req.files) {
+            for (const file of req.files) {
+                await fs.unlink(file.path).catch(() => {});
+            }
         }
         res.status(500).json({ error: 'Error interno del servidor al publicar producto' });
     }
@@ -189,10 +201,10 @@ app.post('/api/productos', (req, res, next) => {
 
 // Actualizar un producto (TEC-U01 - Rol: Admin)
 app.put('/api/productos/:id', (req, res, next) => {
-    upload.single('imagen')(req, res, function (err) {
+    upload.array('imagenes', 5)(req, res, function (err) {
         if (err instanceof multer.MulterError) {
             if (err.code === 'LIMIT_FILE_SIZE') {
-                return res.status(400).json({ error: 'La imagen excede el límite de 5MB' });
+                return res.status(400).json({ error: 'Una de las imágenes excede el límite de 5MB' });
             }
             return res.status(400).json({ error: err.message });
         } else if (err) {
@@ -210,7 +222,11 @@ app.put('/api/productos/:id', (req, res, next) => {
         const prod = await Producto.findOne({ id });
 
         if (!prod) {
-            if (req.file) await fs.unlink(req.file.path).catch(() => {});
+            if (req.files) {
+                for (const file of req.files) {
+                    await fs.unlink(file.path).catch(() => {});
+                }
+            }
             return res.status(404).json({ error: 'Producto no encontrado' });
         }
 
@@ -223,7 +239,11 @@ app.put('/api/productos/:id', (req, res, next) => {
         if (!specs || specs.trim() === "") errors.push("La ficha técnica es requerida");
 
         if (errors.length > 0) {
-            if (req.file) await fs.unlink(req.file.path).catch(() => {});
+            if (req.files) {
+                for (const file of req.files) {
+                    await fs.unlink(file.path).catch(() => {});
+                }
+            }
             return res.status(400).json({ errors });
         }
 
@@ -234,14 +254,20 @@ app.put('/api/productos/:id', (req, res, next) => {
         prod.stock = parsedStock;
         prod.specs = specs.trim();
 
-        // Si se cargó una nueva imagen, reemplazar la anterior
-        if (req.file) {
-            // Opcional: borrar el archivo anterior del disco si no es una predeterminada
-            if (prod.imagePath && !prod.imagePath.includes('/uploads/iphone') && !prod.imagePath.includes('/uploads/s24')) {
-                const oldPath = path.join(__dirname, 'public', prod.imagePath);
-                await fs.unlink(oldPath).catch(() => {});
+        // Si se cargaron nuevas imágenes, reemplazar las anteriores
+        if (req.files && req.files.length > 0) {
+            // Borrar fotos anteriores
+            const oldImages = prod.images && prod.images.length > 0 ? prod.images : [prod.imagePath];
+            for (const imgPath of oldImages) {
+                if (imgPath && !imgPath.includes('/uploads/iphone') && !imgPath.includes('/uploads/s24')) {
+                    const oldPath = path.join(__dirname, 'public', imgPath);
+                    await fs.unlink(oldPath).catch(() => {});
+                }
             }
-            prod.imagePath = `/uploads/${path.basename(req.file.path)}`;
+
+            const imagePaths = req.files.map(file => `/uploads/${path.basename(file.path)}`);
+            prod.imagePath = imagePaths[0];
+            prod.images = imagePaths;
         }
 
         await prod.save();
@@ -249,10 +275,83 @@ app.put('/api/productos/:id', (req, res, next) => {
         res.json({ message: 'Producto actualizado con éxito', producto: prod });
     } catch (err) {
         console.error(err);
-        if (req.file) {
-            await fs.unlink(req.file.path).catch(() => {});
+        if (req.files) {
+            for (const file of req.files) {
+                await fs.unlink(file.path).catch(() => {});
+            }
         }
         res.status(500).json({ error: 'Error interno del servidor al actualizar producto' });
+    }
+});
+
+// Eliminar un producto (TEC-U01 - Rol: Admin)
+app.delete('/api/productos/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const prod = await Producto.findOne({ id });
+
+        if (!prod) {
+            return res.status(404).json({ error: 'Producto no encontrado' });
+        }
+
+        // Borrar archivos de imagen asociados
+        const imagesToDelete = prod.images && prod.images.length > 0 ? prod.images : [prod.imagePath];
+        for (const imgPath of imagesToDelete) {
+            if (imgPath && !imgPath.includes('/uploads/iphone') && !imgPath.includes('/uploads/s24')) {
+                const oldPath = path.join(__dirname, 'public', imgPath);
+                await fs.unlink(oldPath).catch(() => {});
+            }
+        }
+
+        await Producto.deleteOne({ id });
+
+        res.json({ message: 'Producto eliminado con éxito' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Error interno del servidor al eliminar producto' });
+    }
+});
+
+
+// Reservar stock de productos
+app.post('/api/productos/reservar', async (req, res) => {
+    const { items } = req.body;
+    if (!items || !Array.isArray(items)) {
+        return res.status(400).json({ error: 'Lista de items inválida' });
+    }
+    try {
+        for (const item of items) {
+            const prod = await Producto.findOne({ id: item.id });
+            if (prod) {
+                prod.stock = Math.max(0, prod.stock - item.quantity);
+                await prod.save();
+            }
+        }
+        res.json({ message: 'Stock reservado con éxito en la base de datos' });
+    } catch (err) {
+        console.error("Error al reservar stock:", err);
+        res.status(500).json({ error: 'Error al actualizar el stock en la base de datos' });
+    }
+});
+
+// Liberar stock de productos por vencimiento de reserva (48 horas)
+app.post('/api/productos/liberar', async (req, res) => {
+    const { items } = req.body;
+    if (!items || !Array.isArray(items)) {
+        return res.status(400).json({ error: 'Lista de items inválida' });
+    }
+    try {
+        for (const item of items) {
+            const prod = await Producto.findOne({ id: item.id });
+            if (prod) {
+                prod.stock += item.quantity;
+                await prod.save();
+            }
+        }
+        res.json({ message: 'Stock liberado y restaurado en la base de datos' });
+    } catch (err) {
+        console.error("Error al liberar stock:", err);
+        res.status(500).json({ error: 'Error al restaurar el stock en la base de datos' });
     }
 });
 
@@ -333,7 +432,331 @@ app.put('/api/ordenes/:code', async (req, res) => {
     }
 });
 
+// Eliminar una orden (Rol: Admin)
+app.delete('/api/ordenes/:code', async (req, res) => {
+    try {
+        const code = req.params.code.toUpperCase();
+        await Orden.deleteOne({ code });
+        res.json({ message: `Orden ${code} eliminada con éxito` });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Error al eliminar la orden' });
+    }
+});
+
+// ==========================================
+// ENDPOINTS API: RESERVAS Y NOTIFICACIONES
+// ==========================================
+
+// Obtener todas las reservas
+app.get('/api/reservas', async (req, res) => {
+    try {
+        const reservas = await Reserva.find({}).sort({ createdAt: -1 });
+        res.json(reservas);
+    } catch (err) {
+        res.status(500).json({ error: 'Error al obtener las reservas de la base de datos' });
+    }
+});
+
+// Crear una reserva
+app.post('/api/reservas', async (req, res) => {
+    try {
+        const { code, clientName, clientPhone, items, expiresAt } = req.body;
+
+        // Validaciones
+        if (!clientName || !clientPhone || !items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'Datos de la reserva incompletos o inválidos' });
+        }
+
+        // Validar stock antes de realizar descuento
+        for (const item of items) {
+            const prod = await Producto.findOne({ id: item.productId });
+            if (!prod) {
+                return res.status(404).json({ error: `Producto con ID ${item.productId} no encontrado` });
+            }
+            if (prod.stock < item.quantity) {
+                return res.status(400).json({ error: `Stock insuficiente para el producto ${prod.name}` });
+            }
+        }
+
+        // Descontar stock
+        for (const item of items) {
+            const prod = await Producto.findOne({ id: item.productId });
+            prod.stock = Math.max(0, prod.stock - item.quantity);
+            await prod.save();
+        }
+
+        const nuevaReserva = new Reserva({
+            code,
+            clientName,
+            clientPhone,
+            items,
+            expiresAt: new Date(expiresAt),
+            status: 'activa',
+            createdAt: new Date()
+        });
+
+        await nuevaReserva.save();
+        res.status(201).json({ message: 'Reserva registrada con éxito', reserva: nuevaReserva });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Error interno al registrar la reserva' });
+    }
+});
+
+// Liberar reserva manualmente
+app.post('/api/reservas/:code/liberar', async (req, res) => {
+    try {
+        const { code } = req.params;
+        const resv = await Reserva.findOne({ code });
+        if (!resv) {
+            return res.status(404).json({ error: 'Reserva no encontrada' });
+        }
+        if (resv.status !== 'activa') {
+            return res.status(400).json({ error: `La reserva no está activa. Estado actual: ${resv.status}` });
+        }
+
+        resv.status = 'liberada';
+        await resv.save();
+
+        // Devolver stock
+        for (const item of resv.items) {
+            const prod = await Producto.findOne({ id: item.productId });
+            if (prod) {
+                prod.stock += item.quantity;
+                await prod.save();
+            }
+        }
+
+        res.json({ message: 'Reserva liberada con éxito', reserva: resv });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Error al liberar la reserva' });
+    }
+});
+
+// Completar reserva manualmente (Venta realizada)
+app.post('/api/reservas/:code/completar', async (req, res) => {
+    try {
+        const { code } = req.params;
+        const resv = await Reserva.findOne({ code });
+        if (!resv) {
+            return res.status(404).json({ error: 'Reserva no encontrada' });
+        }
+        if (resv.status !== 'activa') {
+            return res.status(400).json({ error: `La reserva no está activa. Estado actual: ${resv.status}` });
+        }
+
+        resv.status = 'completada';
+        await resv.save();
+
+        res.json({ message: 'Reserva completada con éxito', reserva: resv });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Error al completar la reserva' });
+    }
+});
+
+// Obtener notificaciones de WhatsApp (historial)
+app.get('/api/notificaciones', async (req, res) => {
+    try {
+        const notificaciones = await Notificacion.find({}).sort({ sentAt: -1 });
+        res.json(notificaciones);
+    } catch (err) {
+        res.status(500).json({ error: 'Error al obtener el historial de notificaciones' });
+    }
+});
+
+// Hilo de verificación automática de reservas vencidas (Cada 30 segundos)
+setInterval(async () => {
+    try {
+        const now = new Date();
+        const expired = await Reserva.find({ status: 'activa', expiresAt: { $lte: now } });
+
+        for (const resv of expired) {
+            resv.status = 'liberada';
+            await resv.save();
+
+            // Devolver stock
+            for (const item of resv.items) {
+                const prod = await Producto.findOne({ id: item.productId });
+                if (prod) {
+                    prod.stock += item.quantity;
+                    await prod.save();
+                }
+            }
+
+            // Enviar notificación automática por WhatsApp (Simulada/Registrada)
+            const cleanPhone = resv.clientPhone.replace(/[^0-9]/g, '');
+            const msg = `Hola *${resv.clientName}*, su reserva *${resv.code}* por el producto *${resv.items.map(i => i.name).join(', ')}* ha expirado después del límite de 48 horas. El stock ha sido liberado nuevamente al catálogo. ¡Saludos, Drakotec!`;
+            
+            const notif = new Notificacion({
+                type: 'vencimiento_reserva',
+                recipientName: resv.clientName,
+                recipientPhone: cleanPhone,
+                message: msg,
+                sentAt: new Date(),
+                status: 'Enviado'
+            });
+            await notif.save();
+
+            console.log(`[WHATSAPP AUTOMÁTICO - RESERVA EXPIRADA] Enviado a ${cleanPhone}: "${msg}"`);
+        }
+    } catch (err) {
+        console.error("Error al procesar reservas vencidas:", err);
+    }
+}, 30000);
+
+// ==========================================
+// ENDPOINTS DE CAJA Y CONTABILIDAD (MOVIMIENTOS & POS)
+// ==========================================
+
+// Obtener todos los movimientos contables
+app.get('/api/movimientos', async (req, res) => {
+    try {
+        const movimientos = await Movimiento.find({}).sort({ createdAt: -1 });
+        res.json(movimientos);
+    } catch (err) {
+        console.error("Error al obtener movimientos:", err);
+        res.status(500).json({ error: 'Error al obtener movimientos de la base de datos' });
+    }
+});
+
+// Registrar un movimiento manual (Gasto u otro Ingreso)
+app.post('/api/movimientos', async (req, res) => {
+    try {
+        const { tipo, categoria, monto, metodoPago, descripcion, cliente } = req.body;
+        if (!tipo || !monto || !descripcion) {
+            return res.status(400).json({ error: 'Tipo, monto y descripción son obligatorios' });
+        }
+
+        const movimiento = new Movimiento({
+            tipo,
+            categoria: categoria || 'GASTO_OPERATIVO',
+            monto: parseFloat(monto),
+            metodoPago: metodoPago || 'EFECTIVO',
+            descripcion,
+            cliente: cliente || { nombre: 'General', docIdentidad: '' }
+        });
+
+        await movimiento.save();
+        res.status(201).json({ message: 'Movimiento registrado con éxito', movimiento });
+    } catch (err) {
+        console.error("Error al guardar movimiento:", err);
+        res.status(500).json({ error: 'Error al registrar el movimiento' });
+    }
+});
+
+// Editar un movimiento contable existente
+app.put('/api/movimientos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { monto, descripcion, metodoPago, categoria } = req.body;
+        const movimiento = await Movimiento.findById(id);
+
+        if (!movimiento) {
+            return res.status(404).json({ error: 'Movimiento no encontrado' });
+        }
+
+        if (monto !== undefined) movimiento.monto = parseFloat(monto);
+        if (descripcion !== undefined) movimiento.descripcion = descripcion;
+        if (metodoPago !== undefined) movimiento.metodoPago = metodoPago;
+        if (categoria !== undefined) movimiento.categoria = categoria;
+
+        await movimiento.save();
+        res.json({ message: 'Movimiento actualizado correctamente', movimiento });
+    } catch (err) {
+        console.error("Error al editar movimiento:", err);
+        res.status(500).json({ error: 'Error al editar el movimiento' });
+    }
+});
+
+// Eliminar un movimiento contable existente
+app.delete('/api/movimientos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await Movimiento.findByIdAndDelete(id);
+        if (!result) {
+            return res.status(404).json({ error: 'Movimiento no encontrado' });
+        }
+        res.json({ message: 'Movimiento eliminado correctamente' });
+    } catch (err) {
+        console.error("Error al eliminar movimiento:", err);
+        res.status(500).json({ error: 'Error al eliminar el movimiento' });
+    }
+});
+
+
+// Procesar Venta Presencial (POS) con emisión de Factura / Ticket
+app.post('/api/ventas-presenciales', async (req, res) => {
+    try {
+        const { items, metodoPago, cliente, tipoComprobante, total, reservaCode } = req.body;
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'Debe incluir al menos un producto para la venta.' });
+        }
+
+        // Generar número de comprobante único
+        const count = await Movimiento.countDocuments();
+        const comprobanteNum = `${tipoComprobante === 'FACTURA' ? 'FAC' : 'TCK'}-${String(count + 1).padStart(5, '0')}`;
+
+        // 1. Validar y descontar stock
+        let detalleDesc = [];
+        for (const item of items) {
+            const prod = await Producto.findOne({ id: item.id });
+            if (!prod) {
+                return res.status(400).json({ error: `Producto ${item.name || item.id} no fue encontrado.` });
+            }
+            if (prod.stock < item.quantity) {
+                return res.status(400).json({ error: `Stock insuficiente para ${prod.name}. Disponible: ${prod.stock}` });
+            }
+            prod.stock -= item.quantity;
+            await prod.save();
+
+            detalleDesc.push(`${item.quantity}x ${prod.name}`);
+        }
+
+        // 2. Si viene de una reserva, marcar reserva como completada
+        if (reservaCode) {
+            const resv = await Reserva.findOne({ code: reservaCode });
+            if (resv && resv.status === 'activa') {
+                resv.status = 'completada';
+                await resv.save();
+            }
+        }
+
+        // 3. Registrar Movimiento Contable
+        const descCompleta = `Venta Presencial (${tipoComprobante || 'TICKET'}) #${comprobanteNum}: ${detalleDesc.join(', ')}`;
+        const nuevoMovimiento = new Movimiento({
+            tipo: 'INGRESO',
+            categoria: reservaCode ? 'RESERVA' : 'VENTA_PRESENCIAL',
+            monto: parseFloat(total),
+            metodoPago: metodoPago || 'EFECTIVO',
+            descripcion: descCompleta,
+            comprobanteNum,
+            cliente: {
+                nombre: cliente?.nombre || 'Cliente General',
+                docIdentidad: cliente?.docIdentidad || 'S/N'
+            },
+            referenciaId: reservaCode || null
+        });
+
+        await nuevoMovimiento.save();
+
+        res.status(201).json({
+            message: 'Venta presencial completada con éxito',
+            comprobanteNum,
+            movimiento: nuevoMovimiento
+        });
+    } catch (err) {
+        console.error("Error al procesar venta presencial:", err);
+        res.status(500).json({ error: 'Error interno al procesar la venta presencial.' });
+    }
+});
+
 // Iniciar servidor
 app.listen(PORT, () => {
     console.log(`Servidor Drakotec corriendo en: http://localhost:${PORT}`);
 });
+
+

@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Administración de Tienda | Drakotec</title>
+    <title>Panel de Administración Comercial y Taller | Drakotec</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Redirección de seguridad inmediata antes de renderizar body -->
+    <!-- Redirección de seguridad inmediata RBAC -->
     <script>
         const user = JSON.parse(sessionStorage.getItem('drakotec_user'));
         if (!user || user.role !== 'admin') {
-            window.location.replace('portal.html');
+            window.location.replace('tecnico.html');
         }
     </script>
 </head>
@@ -58,84 +58,663 @@
     </header>
 
     <!-- ==========================================
-       SECCIÓN: PANEL ADMINISTRADOR (TEC-U01)
+       SECCIÓN PRINCIPAL DE ADMINISTRADOR (TODO EN UNO)
        ========================================== -->
-    <section id="portal-admin-page" class="section-padding portal-bg" style="padding-top: 140px; min-height: 85vh;">
+    <section id="portal-tecnico-page" class="section-padding portal-bg" style="padding-top: 130px; min-height: 90vh;">
         <div class="container">
-            <div class="portal-header-bar">
-                <span class="user-greeting">Bienvenido: <strong id="loggedInUser">Administrador Drakotec</strong></span>
-                <span style="font-size: 0.9rem; color: var(--text-muted);">Administración Comercial del Catálogo</span>
+            
+            <!-- Barra de Bienvenida y Rol Activo -->
+            <div class="portal-header-bar" style="margin-bottom: 20px;">
+                <div>
+                    <span class="user-greeting">Usuario: <strong id="loggedInUser">Administrador Drakotec</strong></span>
+                    <span id="roleBadge" class="status-badge listo" style="margin-left: 10px;">Rol: Administrador (Acceso Total)</span>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-muted);">
+                    Panel de Control General y Comercial Drakotec
+                </div>
             </div>
 
-            <div class="portal-grid">
-                <!-- Cargar / Editar Producto -->
-                <div class="glass-card contact-form">
-                    <h3 id="productFormTitle">Publicar Nuevo Producto</h3>
-                    <form id="productForm" style="margin-top: 16px;" enctype="multipart/form-data">
-                        <input type="hidden" id="prodId" value="">
-                        <div class="form-group">
-                            <label for="prodName">Nombre del Producto *</label>
-                            <input type="text" id="prodName" class="form-input" required placeholder="Ej: iPhone 15 Pro Max (256GB)">
-                        </div>
-                        <div class="form-group-row">
+            <!-- NAVEGACIÓN DE MÓDULOS DEL ADMINISTRADOR (TABS COMPLETOS) -->
+            <div class="module-tabs" id="moduleTabsNav">
+                <button class="module-tab active" data-target="mod-inventario">
+                    📦 Catálogo e Inventario
+                </button>
+                <button class="module-tab" data-target="mod-ordenes-guardadas">
+                    📂 Órdenes Guardadas
+                </button>
+                <button class="module-tab" data-target="mod-contabilidad" id="tabContabilidad">
+                    📊 Contabilidad / Caja
+                </button>
+                <button class="module-tab" data-target="mod-reservas" id="tabReservas">
+                    📌 Reservas y WhatsApp
+                </button>
+                <button class="module-tab" data-target="mod-configuracion" id="tabConfiguracion">
+                    ⚙️ Configuración del Sistema
+                </button>
+            </div>
+
+            <!-- ==========================================
+               MÓDULO A: INVENTARIO Y CATÁLOGO COMERCIAL
+               ========================================== -->
+            <div id="mod-inventario" class="module-content">
+                <div class="portal-grid" style="display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 24px;">
+                    <!-- Cargar / Editar Producto -->
+                    <div class="glass-card contact-form">
+                        <h3 id="productFormTitle">Publicar Nuevo Producto</h3>
+                        <form id="productForm" style="margin-top: 16px;" enctype="multipart/form-data">
+                            <input type="hidden" id="prodId" value="">
                             <div class="form-group">
-                                <label for="prodPrice">Precio (Bs.) *</label>
-                                <input type="number" id="prodPrice" class="form-input" required min="0" step="0.01" placeholder="Monto en Bs.">
+                                <label for="prodName">Nombre del Producto *</label>
+                                <input type="text" id="prodName" class="form-input" required placeholder="Ej: iPhone 15 Pro Max (256GB)">
+                            </div>
+                            <div class="form-group-row">
+                                <div class="form-group">
+                                    <label for="prodPrice">Precio (Bs.) *</label>
+                                    <input type="number" id="prodPrice" class="form-input" required min="0" step="0.01" placeholder="Monto en Bs.">
+                                </div>
+                                <div class="form-group">
+                                    <label for="prodStock">Stock Inicial *</label>
+                                    <input type="number" id="prodStock" class="form-input" required min="0" placeholder="Cantidad física">
+                                </div>
                             </div>
                             <div class="form-group">
-                                <label for="prodStock">Stock Inicial *</label>
-                                <input type="number" id="prodStock" class="form-input" required min="0" placeholder="Cantidad física">
+                                <label for="prodCategory">Categoría *</label>
+                                <select id="prodCategory" class="form-select" required>
+                                    <option value="" disabled selected>Elige una categoría</option>
+                                    <option value="celulares">Celulares</option>
+                                    <option value="audio">Audio</option>
+                                    <option value="smartwatches">Smartwatches</option>
+                                    <option value="accesorios">Accesorios</option>
+                                </select>
                             </div>
+                            <div class="form-group">
+                                <label for="prodSpecs">Ficha Técnica *</label>
+                                <textarea id="prodSpecs" class="form-input" rows="3" required placeholder="Detalles de hardware, pantalla, memoria, garantía..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="prodImage">Imágenes del Producto (Múltiple, máx 5, JPG/PNG, máx 5MB) *</label>
+                                <input type="file" id="prodImage" class="form-input-file" accept="image/png, image/jpeg, image/jpg" multiple>
+                                <p id="imageRequiredNotice" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Requerido para nuevos productos. La primera será la imagen de portada.</p>
+                                <div id="editImagesPreview" style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;"></div>
+                            </div>
+                            <div class="btn-group-row" style="display: flex; gap: 8px;">
+                                <button type="submit" class="btn btn-primary" style="flex-grow: 1;" id="prodSubmitBtn">Publicar Producto</button>
+                                <button type="button" class="btn btn-secondary" id="cancelEditBtn" style="display: none;">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Inventario de Catálogo Existente -->
+                    <div class="glass-card table-panel">
+                        <h3>Catálogo de Inventario</h3>
+                        <div class="table-responsive" style="margin-top: 16px;">
+                            <table class="portal-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Producto</th>
+                                        <th>Precio (Bs.)</th>
+                                        <th>Stock</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminProductsTableBody">
+                                    <!-- Carga dinámica -->
+                                </tbody>
+                            </table>
                         </div>
-                        <div class="form-group">
-                            <label for="prodCategory">Categoría *</label>
-                            <select id="prodCategory" class="form-select" required>
-                                <option value="" disabled selected>Elige una categoría</option>
-                                <option value="celulares">Celulares</option>
-                                <option value="audio">Audio</option>
-                                <option value="smartwatches">Smartwatches</option>
-                                <option value="accesorios">Accesorios</option>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==========================================
+               MÓDULO C: ÓRDENES GUARDADAS (CON BORRADO ACTIVO)
+               ========================================== -->
+            <div id="mod-ordenes-guardadas" class="module-content" style="display: none;">
+                <div class="glass-card table-panel">
+                    <!-- Barra de Buscador y Filtros -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">
+                        <h3>Órdenes Técnicas Guardadas</h3>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <input type="text" id="searchOrdersInput" class="form-input" placeholder="🔍 Buscar cliente, código, IMEI..." style="width: 250px;">
+                            <select id="filterStatusSelect" class="form-select" style="width: 180px;">
+                                <option value="ALL">Todos los Estados</option>
+                                <option value="recibido">🔵 Recibido</option>
+                                <option value="diagnostico">🟣 En Diagnóstico</option>
+                                <option value="reparacion">🟠 En Reparación</option>
+                                <option value="listo">🟢 Listo</option>
+                                <option value="entregado">⚪ Entregado</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="prodSpecs">Ficha Técnica *</label>
-                            <textarea id="prodSpecs" class="form-input" rows="3" required placeholder="Detalles de hardware, pantalla, memoria, garantía..."></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="prodImage">Imagen Principal (JPG/PNG, máx 5MB) *</label>
-                            <input type="file" id="prodImage" class="form-input-file" accept="image/png, image/jpeg, image/jpg">
-                            <p id="imageRequiredNotice" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Requerido para nuevos productos.</p>
-                        </div>
-                        <div class="btn-group-row" style="display: flex; gap: 8px;">
-                            <button type="submit" class="btn btn-primary" style="flex-grow: 1;" id="prodSubmitBtn">Publicar Producto</button>
-                            <button type="button" class="btn btn-secondary" id="cancelEditBtn" style="display: none;">Cancelar</button>
-                        </div>
-                    </form>
-                </div>
+                    </div>
 
-                <!-- Inventario de Catálogo Existente -->
-                <div class="glass-card table-panel">
-                    <h3>Catálogo de Inventario</h3>
-                    <div class="table-responsive" style="margin-top: 16px;">
+                    <!-- Tabla de Órdenes -->
+                    <div class="table-responsive">
                         <table class="portal-table">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
-                                    <th>Producto</th>
-                                    <th>Precio (Bs.)</th>
-                                    <th>Stock</th>
-                                    <th>Acción</th>
+                                    <th>Código</th>
+                                    <th>Cliente</th>
+                                    <th>Dispositivo / IMEI</th>
+                                    <th>Falla Declarada</th>
+                                    <th>Estado</th>
+                                    <th>Total ($)</th>
+                                    <th>Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody id="adminProductsTableBody">
-                                <!-- Carga dinámica -->
+                            <tbody id="savedOrdersTableBody">
+                                <!-- Se llena dinámicamente -->
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
+
+
+
+            <!-- ==========================================
+               MÓDULO D: CONTABILIDAD / CAJA DEL TALLER (ACTIVO)
+               ========================================== -->
+            <div id="mod-contabilidad" class="module-content" style="display: none;">
+                <div class="glass-card contact-form">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3>📊 Contabilidad y Caja del Taller</h3>
+                        <span class="status-badge listo">Acceso Total Administrador</span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 16px; border-radius: 12px;">
+                            <span style="font-size: 0.85rem; color: var(--text-muted);">Total Cobrado (Hoy)</span>
+                            <h2 style="color: #34d399; margin-top: 4px;" id="cajaIngresos">$0.00</h2>
+                        </div>
+                        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); padding: 16px; border-radius: 12px;">
+                            <span style="font-size: 0.85rem; color: var(--text-muted);">Gastos en Repuestos</span>
+                            <h2 style="color: #ef4444; margin-top: 4px;" id="cajaGastos">$0.00</h2>
+                        </div>
+                        <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); padding: 16px; border-radius: 12px;">
+                            <span style="font-size: 0.85rem; color: var(--text-muted);">Cobros Pendientes</span>
+                            <h2 style="color: #fbbf24; margin-top: 4px;" id="cajaPendientes">$0.00</h2>
+                        </div>
+                        <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 16px; border-radius: 12px;">
+                            <span style="font-size: 0.85rem; color: var(--text-muted);">Saldo Neto en Caja</span>
+                            <h2 style="color: #60a5fa; margin-top: 4px;" id="cajaSaldo">$0.00</h2>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px;">
+                        <button type="button" class="btn btn-primary" id="btnAbrirPOS" onclick="if(document.getElementById('modalPOS')) document.getElementById('modalPOS').style.display='flex';" style="background: linear-gradient(135deg, #10b981, #059669); font-weight: bold; padding: 12px 20px; cursor: pointer;">🛒 Nueva Venta Presencial (POS)</button>
+                        <button type="button" class="btn btn-secondary" id="btnRegistrarGasto" onclick="if(document.getElementById('modalGasto')) document.getElementById('modalGasto').style.display='flex';" style="border-color: #ef4444; color: #ef4444; cursor: pointer;">💸 Registrar Gasto / Egreso</button>
+
+                        <button type="button" class="btn btn-secondary" id="btnExportarCsv" onclick="exportarReporteExcelCSV()" style="cursor: pointer;">📊 Exportar Excel / PDF</button>
+                    </div>
+
+
+
+                    <!-- Tabla de Transacciones Contables / Caja -->
+                    <div style="margin-top: 24px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h4 style="margin: 0; color: var(--text-color);">📜 Historial de Movimientos de Caja</h4>
+                            <div style="display: flex; gap: 8px;">
+                                <select id="filtroTipoMovimiento" class="form-input" style="padding: 6px 12px; font-size: 0.85rem; width: auto;">
+                                    <option value="TODOS">Todos los tipos</option>
+                                    <option value="INGRESO">Ingresos</option>
+                                    <option value="GASTO">Gastos</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="portal-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha/Hora</th>
+                                        <th>Tipo</th>
+                                        <th>Categoría</th>
+                                        <th>Descripción</th>
+                                        <th>Método Pago</th>
+                                        <th>Comprobante</th>
+                                        <th>Monto</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablaMovimientosBody">
+                                    <tr>
+                                        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 20px;">Cargando movimientos contables...</td>
+                                    </tr>
+                                </tbody>
+
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- ==========================================
+               MÓDULO E: RESERVAS Y NOTIFICACIONES DE WHATSAPP
+               ========================================== -->
+            <div id="mod-reservas" class="module-content" style="display: none;">
+                <div class="portal-grid" style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 24px;">
+                    <!-- Tabla de Reservas -->
+                    <div class="glass-card table-panel">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h3>Seguimiento de Reservas</h3>
+                            <button type="button" class="btn btn-secondary" id="btnRefreshReservations" style="padding: 6px 12px; font-size: 0.8rem; height: auto;">🔄 Recargar</button>
+                        </div>
+                        <div class="table-responsive" style="margin-top: 16px;">
+                            <table class="portal-table">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Cliente</th>
+                                        <th>Productos</th>
+                                        <th>Vence</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminReservationsTableBody">
+                                    <!-- Carga dinámica -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Notificaciones de WhatsApp -->
+                    <div class="glass-card table-panel">
+                        <h3>Historial de WhatsApp Automático</h3>
+                        <div style="margin-top: 16px; max-height: 480px; overflow-y: auto; padding-right: 8px;">
+                            <div id="whatsappNotificationsLog" style="display: flex; flex-direction: column; gap: 12px;">
+                                <!-- Carga dinámica -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==========================================
+               MÓDULO F: CONFIGURACIÓN DEL SISTEMA
+               ========================================== -->
+            <div id="mod-configuracion" class="module-content" style="display: none;">
+                <div class="glass-card contact-form">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3>⚙️ Configuración del Sistema y Gestión de Permisos</h3>
+                        <span class="status-badge listo">Acceso Total Administrador</span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px;">
+                        <div>
+                            <h4>Parámetros del Taller y Contacto</h4>
+                            <form id="settingsForm" style="margin-top: 12px;">
+                                <div class="form-group">
+                                    <label for="cfgStoreName">Nombre del Establecimiento</label>
+                                    <input type="text" id="cfgStoreName" class="form-input" required value="Drakotec Taller de Reparación">
+                                </div>
+                                <div class="form-group">
+                                    <label for="cfgStorePhone">Teléfono Oficial (WhatsApp)</label>
+                                    <input type="text" id="cfgStorePhone" class="form-input" required value="+58 412 1234567">
+                                </div>
+                                <div class="form-group">
+                                    <label for="cfgStoreEmail">Correo Electrónico de Soporte</label>
+                                    <input type="email" id="cfgStoreEmail" class="form-input" required value="contacto@drakotec.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="cfgStoreLocation">Ubicación / Dirección Física</label>
+                                    <input type="text" id="cfgStoreLocation" class="form-input" required value="Av. Tecnológica 1024, Edificio Silicon, Local 3B">
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">💾 Guardar Configuración</button>
+                            </form>
+                        </div>
+
+                        <!-- GESTIÓN DE USUARIOS Y ROLES (ADMINS Y TÉCNICOS) -->
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <h4 style="margin: 0;">👥 Gestión de Usuarios y Roles</h4>
+                                <button type="button" id="btnOpenAddUserModal" onclick="if(typeof abrirModalNuevoUsuario === 'function') abrirModalNuevoUsuario();" class="btn btn-secondary" style="font-size: 0.8rem; padding: 4px 10px; border-color: #34d399; color: #34d399;">+ Nuevo Usuario</button>
+                            </div>
+                            
+                            <div class="table-responsive" style="max-height: 240px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                                <table class="portal-table" style="font-size: 0.85rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Usuario / Nombre</th>
+                                            <th>Rol</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="usersTableBody">
+                                        <!-- Carga dinámica por JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div style="grid-column: span 2; margin-top: 24px; border-top: 1px solid var(--border-glass); padding-top: 20px;">
+                            <h4 style="color: var(--primary-color); margin-bottom: 12px;">📊 Editor de Cotización Online Exprés</h4>
+                            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Configura los precios base, tiempos de entrega y los multiplicadores de marca y modelos que se muestran a los usuarios en la página pública.</p>
+
+                            <form id="cotizadorConfigForm">
+                                <h5 style="color: var(--accent-purple); margin-bottom: 10px;">1. Precios Base por Falla (USD/Bs)</h5>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;">
+                                    <div class="form-group">
+                                        <label for="cfgIssueScreen">Pantalla (Base USD)</label>
+                                        <input type="number" id="cfgIssueScreen" class="form-input" min="0" step="1" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cfgIssueBattery">Batería (Base USD)</label>
+                                        <input type="number" id="cfgIssueBattery" class="form-input" min="0" step="1" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cfgIssuePort">Puerto Carga (Base USD)</label>
+                                        <input type="number" id="cfgIssuePort" class="form-input" min="0" step="1" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cfgIssueCamera">Cámara (Base USD)</label>
+                                        <input type="number" id="cfgIssueCamera" class="form-input" min="0" step="1" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cfgIssueDiag">Diagnóstico (Base USD)</label>
+                                        <input type="number" id="cfgIssueDiag" class="form-input" min="0" step="1" required>
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; margin-bottom: 12px;">
+                                    <h5 style="color: var(--accent-purple); margin: 0;">2. Gestión Visual de Marcas y Modelos</h5>
+                                    <button type="button" id="btnAddBrandBtn" class="btn btn-secondary" style="font-size: 0.8rem; padding: 4px 10px; border-color: #8b5cf6; color: #8b5cf6;">+ Agregar Marca</button>
+                                </div>
+
+                                <div id="brandsVisualContainer" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px;">
+                                    <!-- Se genera dinámicamente mediante JS -->
+                                </div>
+
+                                <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, #8b5cf6, #6366f1); font-weight: bold; width: 100%; margin-top: 8px;">💾 Guardar Cambios de Cotización Exprés</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </section>
+
+    <!-- ==========================================
+       MODAL DE VENTA PRESENCIAL (POS)
+       ========================================== -->
+    <div id="modalPOS" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); z-index: 10000; align-items: center; justify-content: center; padding: 20px;">
+        <div class="glass-card" style="width: 100%; max-width: 800px; max-height: 90vh; overflow-y: auto; position: relative;">
+            <button type="button" id="btnCerrarPOS" style="position: absolute; top: 16px; right: 16px; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer;">&times;</button>
+            <h3 style="color: var(--primary-color); margin-bottom: 16px;">🛒 Nueva Venta Presencial (POS)</h3>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <!-- Columna Izquierda: Selección de Productos -->
+                <div>
+                    <h4 style="margin-bottom: 8px;">1. Agregar Productos</h4>
+                    <div style="margin-bottom: 12px;">
+                        <label style="font-size: 0.85rem;">Buscar en Catálogo / Reservas</label>
+                        <select id="posSelectProducto" class="form-input" style="width: 100%;">
+                            <option value="">-- Seleccionar Producto --</option>
+                        </select>
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                        <input type="number" id="posCantProducto" class="form-input" min="1" value="1" style="width: 80px;" placeholder="Cant">
+                        <button type="button" class="btn btn-primary" id="btnPosAgregarProd" style="flex: 1;">+ Agregar</button>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
+                        <label style="font-size: 0.85rem; color: #fbbf24;">¿Es una Reserva previa?</label>
+                        <div style="display: flex; gap: 8px; margin-top: 4px;">
+                            <input type="text" id="posReservaCodeInput" class="form-input" placeholder="Ej: DRAKO-RES-..." style="font-size: 0.85rem;">
+                            <button type="button" class="btn btn-secondary" id="btnPosCargarReserva" style="font-size: 0.8rem; padding: 6px 10px;">Cargar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Columna Derecha: Detalle de Venta y Pago -->
+                <div>
+                    <h4 style="margin-bottom: 8px;">2. Resumen y Facturación</h4>
+                    <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; max-height: 150px; overflow-y: auto; margin-bottom: 12px;">
+                        <table style="width: 100%; font-size: 0.85rem;" id="posTablaItems">
+                            <thead>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                    <th style="text-align: left;">Item</th>
+                                    <th>Cant</th>
+                                    <th>P.Unit</th>
+                                    <th>Total</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="5" style="text-align:center; color: var(--text-muted);">Sin productos agregados</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div style="font-size: 1.2rem; font-weight: bold; text-align: right; margin-bottom: 12px; color: #34d399;">
+                        Total: $<span id="posTotalMonto">0.00</span>
+                    </div>
+
+                    <form id="posFormVenta">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <div>
+                                <label style="font-size: 0.8rem;">Nombre Cliente</label>
+                                <input type="text" id="posClienteNombre" class="form-input" value="Cliente General" required>
+                            </div>
+                            <div>
+                                <label style="font-size: 0.8rem;">CI / RUC / Doc</label>
+                                <input type="text" id="posClienteDoc" class="form-input" placeholder="Opcional">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                            <div>
+                                <label style="font-size: 0.8rem;">Método de Pago</label>
+                                <select id="posMetodoPago" class="form-input" required>
+                                    <option value="EFECTIVO">Efectivo</option>
+                                    <option value="TRANSFERENCIA">Transferencia</option>
+                                    <option value="TARJETA">Tarjeta Débito/Crédito</option>
+                                    <option value="QR">Pago QR</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size: 0.8rem;">Comprobante</label>
+                                <select id="posTipoComprobante" class="form-input" required>
+                                    <option value="FACTURA">Factura</option>
+                                    <option value="TICKET">Ticket de Venta</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" style="width: 100%; background: linear-gradient(135deg, #10b981, #059669); font-weight: bold; padding: 12px;">✅ Finalizar Venta y Emitir Factura</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+       MODAL FACTURA / TICKET IMPRIMIBLE
+       ========================================== -->
+    <div id="modalFactura" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 10001; align-items: center; justify-content: center; padding: 20px;">
+        <div class="glass-card" style="width: 100%; max-width: 450px; background: #ffffff; color: #000000; font-family: monospace; padding: 24px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <div id="facturaPrintArea">
+                <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 12px; margin-bottom: 12px;">
+                    <h2 style="margin: 0; font-size: 1.4rem; color: #000;">DRAKOTEC POS</h2>
+                    <p style="margin: 4px 0 0 0; font-size: 0.8rem;">Soluciones Tecnológicas & Taller</p>
+                    <p style="margin: 2px 0 0 0; font-size: 0.75rem;">Av. Tecnológica 1024 - RUC: 21908492019</p>
+                    <p style="margin: 2px 0 0 0; font-size: 0.75rem;">Tel: +58 412 1234567</p>
+                </div>
+                
+                <div style="font-size: 0.8rem; margin-bottom: 12px;">
+                    <div><strong>COMPROBANTE:</strong> <span id="facNum">FAC-00001</span></div>
+                    <div><strong>FECHA:</strong> <span id="facFecha">04/08/2026</span></div>
+                    <div><strong>CLIENTE:</strong> <span id="facCliente">Cliente General</span></div>
+                    <div><strong>DOC/RUC:</strong> <span id="facDoc">S/N</span></div>
+                    <div><strong>PAGO:</strong> <span id="facMetodo">EFECTIVO</span></div>
+                </div>
+
+                <table style="width: 100%; font-size: 0.8rem; border-collapse: collapse; margin-bottom: 12px;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #000;">
+                            <th style="text-align: left;">Cant/Item</th>
+                            <th style="text-align: right;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="facItemsBody">
+                    </tbody>
+                </table>
+
+                <div style="border-top: 2px dashed #000; padding-top: 8px; font-size: 0.9rem; font-weight: bold; text-align: right;">
+                    TOTAL PAGADO: $<span id="facTotalMonto">0.00</span>
+                </div>
+
+                <div style="text-align: center; margin-top: 16px; font-size: 0.75rem; border-top: 1px solid #ccc; padding-top: 8px;">
+                    ¡Gracias por su compra en Drakotec!<br>
+                    Conserve este comprobante para garantía.
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 20px;" class="no-print">
+                <button type="button" class="btn btn-primary" onclick="window.print()" style="flex: 1; background: #2563eb; color: white;">🖨️ Imprimir Factura</button>
+                <button type="button" class="btn btn-secondary" id="btnCerrarFactura" style="background: #64748b; color: white;">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+       MODAL REGISTRAR GASTO MANUAL
+       ========================================== -->
+    <div id="modalGasto" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); z-index: 10000; align-items: center; justify-content: center; padding: 20px;">
+        <div class="glass-card" style="width: 100%; max-width: 450px;">
+            <h3 style="color: #ef4444; margin-bottom: 16px;">💸 Registrar Gasto / Egreso de Caja</h3>
+            <form id="formRegistrarGasto">
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Monto ($)</label>
+                    <input type="number" step="0.01" id="gastoMonto" class="form-input" required placeholder="0.00">
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Categoría</label>
+                    <select id="gastoCategoria" class="form-input" required>
+                        <option value="GASTO_OPERATIVO">Gasto Operativo / Insumos</option>
+                        <option value="REPARACION">Compra de Repuestos</option>
+                        <option value="OTRO">Otro Egreso</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Descripción / Concepto</label>
+                    <input type="text" id="gastoDescripcion" class="form-input" required placeholder="Ej: Compra de pantallas y pegamento T7000">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label>Método de Pago Empleado</label>
+                    <select id="gastoMetodoPago" class="form-input" required>
+                        <option value="EFECTIVO">Efectivo de Caja</option>
+                        <option value="TRANSFERENCIA">Transferencia bancaria</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1; background: #ef4444; border: none;">Registrar Egreso</button>
+                    <button type="button" class="btn btn-secondary" id="btnCerrarGasto">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    <!-- ==========================================
+       MODAL EDITAR MOVIMIENTO CONTABLE
+       ========================================== -->
+    <div id="modalEditarMovimiento" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); z-index: 10000; align-items: center; justify-content: center; padding: 20px;">
+        <div class="glass-card" style="width: 100%; max-width: 450px;">
+            <h3 style="color: #60a5fa; margin-bottom: 16px;">✏️ Editar Movimiento de Caja</h3>
+            <form id="formEditarMovimiento">
+                <input type="hidden" id="editMovId">
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Monto ($)</label>
+                    <input type="number" step="0.01" id="editMovMonto" class="form-input" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Categoría</label>
+                    <select id="editMovCategoria" class="form-input" required>
+                        <option value="VENTA_PRESENCIAL">Venta Presencial</option>
+                        <option value="VENTA_WEB">Venta Web</option>
+                        <option value="RESERVA">Reserva</option>
+                        <option value="REPARACION">Reparación de Taller</option>
+                        <option value="GASTO_OPERATIVO">Gasto Operativo</option>
+                        <option value="OTRO">Otro</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Descripción / Concepto</label>
+                    <input type="text" id="editMovDescripcion" class="form-input" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label>Método de Pago</label>
+                    <select id="editMovMetodoPago" class="form-input" required>
+                        <option value="EFECTIVO">Efectivo</option>
+                        <option value="TRANSFERENCIA">Transferencia</option>
+                        <option value="TARJETA">Tarjeta</option>
+                        <option value="QR">Pago QR</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">💾 Guardar Cambios</button>
+                    <button type="button" class="btn btn-secondary" id="btnCerrarEditarMov">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- ==========================================
+       MODAL CREAR / EDITAR USUARIO Y ROL
+       ========================================== -->
+    <div id="modalUsuario" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(5px); z-index: 10000; align-items: center; justify-content: center; padding: 20px;">
+        <div class="glass-card" style="width: 100%; max-width: 450px; position: relative;">
+            <button type="button" id="btnCerrarModalUsuario" onclick="document.getElementById('modalUsuario').style.display='none';" style="position: absolute; top: 16px; right: 16px; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer;">&times;</button>
+            <h3 id="modalUsuarioTitle" style="color: var(--primary-color); margin-bottom: 16px;">👤 Crear Nuevo Usuario / Rol</h3>
+            
+            <form id="formUsuario" onsubmit="guardarUsuarioSubmit(event)">
+                <input type="hidden" id="userFormIndex" value="-1">
+                
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="usrNombre">Nombre Completo del Personal *</label>
+                    <input type="text" id="usrNombre" class="form-input" required placeholder="Ej: Carlos López (Técnico)">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="usrUsername">Nombre de Usuario (Login) *</label>
+                    <input type="text" id="usrUsername" class="form-input" required placeholder="Ej: clopez">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="usrRole">Rol de Acceso *</label>
+                    <select id="usrRole" class="form-select" required>
+                        <option value="tecnico">🛠️ Técnico de Soporte / Taller</option>
+                        <option value="admin">👑 Administrador de Tienda (Acceso Total)</option>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label for="usrPassword">Contraseña de Acceso *</label>
+                    <input type="password" id="usrPassword" class="form-input" required placeholder="••••••••">
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">💾 Guardar Usuario</button>
+                    <button type="button" class="btn btn-secondary" id="btnCancelUserModal" onclick="document.getElementById('modalUsuario').style.display='none';">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="print-modal" id="printModal" style="display: none;">
+        <div class="print-preview-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #ddd; padding-bottom: 8px;">
+                <h4 style="margin:0;">Comprobante de Servicio Técnico</h4>
+                <button type="button" id="closePrintModalBtn" style="background:none; border:none; font-size: 1.2rem; cursor:pointer;">✖</button>
+            </div>
+            <div id="printTicketContent" class="ticket-80mm">
+                <!-- Se genera dinámicamente en JS -->
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 16px;">
+                <button type="button" class="btn btn-primary" id="btnExecutePrint" style="width: 100%;">🖨️ Imprimir Documento</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Footer -->
     <footer>

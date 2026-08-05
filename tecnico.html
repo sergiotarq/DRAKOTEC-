@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Soporte Técnico | Drakotec</title>
+    <title>Sistema de Soporte Técnico | Drakotec</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Redirección de seguridad inmediata antes de renderizar body -->
+    <!-- Redirección de seguridad inmediata RBAC -->
     <script>
         const user = JSON.parse(sessionStorage.getItem('drakotec_user'));
-        if (!user || user.role !== 'tecnico') {
+        if (!user || (user.role !== 'tecnico' && user.role !== 'admin')) {
             window.location.replace('portal.html');
         }
     </script>
@@ -52,70 +52,286 @@
                     </svg>
                 </button>
 
-                <!-- Carrito deshabilitado en panel técnico -->
                 <button class="btn btn-secondary" id="logoutBtn" style="padding: 8px 18px; font-size: 0.9rem;">Cerrar Sesión</button>
             </div>
         </div>
     </header>
 
     <!-- ==========================================
-       SECCIÓN: PANEL TÉCNICO (TEC-A01)
+       SECCIÓN PRINCIPAL DE TALLER TÉCNICO Y ROLES
        ========================================== -->
-    <section id="portal-tecnico-page" class="section-padding portal-bg" style="padding-top: 140px; min-height: 85vh;">
+    <section id="portal-tecnico-page" class="section-padding portal-bg" style="padding-top: 130px; min-height: 90vh;">
         <div class="container">
-            <div class="portal-header-bar">
-                <span class="user-greeting">Bienvenido: <strong id="loggedInUser">Técnico Drakotec</strong></span>
-                <span style="font-size: 0.9rem; color: var(--text-muted);">Laboratorio de Reparaciones</span>
+            
+            <!-- Barra de Bienvenida y Rol Activo -->
+            <div class="portal-header-bar" style="margin-bottom: 20px;">
+                <div>
+                    <span class="user-greeting">Usuario: <strong id="loggedInUser">Técnico Drakotec</strong></span>
+                    <span id="roleBadge" class="status-badge reparacion" style="margin-left: 10px;">Rol: Técnico / Operador</span>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-muted);">
+                    Sistema de Gestión de Taller RBAC v2.5
+                </div>
             </div>
 
-            <div class="portal-grid">
-                <!-- Formulario de Registro de Ingresos -->
-                <div class="glass-card contact-form">
-                    <h3>Registrar Ingreso de Equipo</h3>
-                    <form id="registerOrderForm" style="margin-top: 16px;">
-                        <div class="form-group">
-                            <label for="ordClient">Nombre del Cliente *</label>
-                            <input type="text" id="ordClient" class="form-input" required placeholder="Nombre completo del cliente">
-                        </div>
-                        <div class="form-group">
-                            <label for="ordBrandModel">Marca y Modelo del Dispositivo *</label>
-                            <input type="text" id="ordBrandModel" class="form-input" required placeholder="Ej: iPhone 14 Pro, Galaxy S23">
-                        </div>
-                        <div class="form-group">
-                            <label for="ordIssues">Fallas Reportadas *</label>
-                            <textarea id="ordIssues" class="form-input" rows="3" required placeholder="Ej: Pantalla rota, puerto de carga no funciona, batería inflada"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="ordAccessories">Accesorios Entregados (Opcional)</label>
-                            <input type="text" id="ordAccessories" class="form-input" placeholder="Ej: Cargador, funda protectora, caja original">
-                        </div>
-                        <button type="submit" class="btn btn-primary" style="width: 100%;">Guardar Ingreso e Imprimir Ticket</button>
-                    </form>
-                </div>
+            <!-- NAVEGACIÓN DE MÓDULOS (PESTAÑAS - FOCUSED PARA TÉCNICO) -->
+            <div class="module-tabs" id="moduleTabsNav">
+                <button class="module-tab active" data-target="mod-nueva-orden">
+                    📝 Nueva Orden de Servicio
+                </button>
+                <button class="module-tab" data-target="mod-ordenes-guardadas">
+                    📂 Órdenes Guardadas
+                </button>
+            </div>
 
-                <!-- Tabla de Órdenes Técnicas Activas -->
+            <!-- ==========================================
+               MÓDULO 1: NUEVA ORDEN DE SERVICIO
+               ========================================== -->
+            <div id="mod-nueva-orden" class="module-content">
+                <div class="portal-grid" style="grid-template-columns: 1.2fr 0.8fr; gap: 24px;">
+                    
+                    <!-- Columna Izquierda: Datos del Cliente, Equipo, Falla y Patrón -->
+                    <div class="glass-card contact-form">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h3>Orden de Servicio Técnico</h3>
+                            <span style="font-family: monospace; font-size: 0.9rem; color: var(--accent-blue);" id="currentOrdCode">#ORD-TEMP</span>
+                        </div>
+
+                        <form id="registerOrderForm">
+                            <!-- Datos del Cliente -->
+                            <h4 style="font-size: 0.95rem; color: var(--accent-purple); margin-bottom: 10px; border-bottom: 1px solid var(--border-glass); padding-bottom: 4px;">👤 1. Datos del Cliente</h4>
+                            <div class="form-group-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div class="form-group">
+                                    <label for="ordClient">Nombre del Cliente *</label>
+                                    <input type="text" id="ordClient" class="form-input" required placeholder="Ej: Carlos Mendoza">
+                                </div>
+                                <div class="form-group">
+                                    <label for="ordPhone">Teléfono / WhatsApp *</label>
+                                    <input type="text" id="ordPhone" class="form-input" required placeholder="Ej: +58 412 1234567">
+                                </div>
+                            </div>
+
+                            <!-- Datos del Equipo -->
+                            <h4 style="font-size: 0.95rem; color: var(--accent-purple); margin-top: 16px; margin-bottom: 10px; border-bottom: 1px solid var(--border-glass); padding-bottom: 4px;">📱 2. Datos del Equipo</h4>
+                            <div class="form-group-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div class="form-group">
+                                    <label for="ordDeviceType">Tipo de Equipo *</label>
+                                    <select id="ordDeviceType" class="form-select" required>
+                                        <option value="Celular" selected>📱 Celular / Smartphone</option>
+                                        <option value="Tablet">📱 Tablet / iPad</option>
+                                        <option value="PC">💻 Laptop / PC</option>
+                                        <option value="Otros">📟 Otro Dispositivo</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ordBrandModel">Marca y Modelo *</label>
+                                    <input type="text" id="ordBrandModel" class="form-input" required placeholder="Ej: Samsung Galaxy S22 Ultra">
+                                </div>
+                            </div>
+
+                            <div class="form-group-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div class="form-group">
+                                    <label for="ordImei">IMEI / N° de Serie *</label>
+                                    <input type="text" id="ordImei" class="form-input" required placeholder="15 dígitos o N° Serie">
+                                </div>
+                                <div class="form-group">
+                                    <label for="ordPhysicalState">Estado Físico del Equipo *</label>
+                                    <select id="ordPhysicalState" class="form-select" required>
+                                        <option value="Rayones leves">Rayones leves uso normal</option>
+                                        <option value="Pantalla estrellada / rota">Pantalla estrellada / cristal roto</option>
+                                        <option value="Tapa trasera fisurada">Tapa trasera fisurada</option>
+                                        <option value="Mojado / Humedad">Humedad / Mojado</option>
+                                        <option value="Impecable">Impecable / Como nuevo</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="ordAccessories">Accesorios Entregados</label>
+                                <input type="text" id="ordAccessories" class="form-input" placeholder="Ej: Cargador original, funda silicona, caja original">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="ordIssues">Falla Declarada y Diagnóstico *</label>
+                                <textarea id="ordIssues" class="form-input" rows="2" required placeholder="Describa la falla reportada por el cliente..."></textarea>
+                            </div>
+
+                            <!-- Plantillas Rápidas -->
+                            <div class="form-group">
+                                <label style="font-size: 0.85rem; color: var(--text-muted);">Servicios Rápidos:</label>
+                                <div class="quick-templates">
+                                    <button type="button" class="quick-template-btn" data-falla="Cambio de pantalla completa por rotura" data-costo="45">📱 Cambio Pantalla ($45)</button>
+                                    <button type="button" class="quick-template-btn" data-falla="Batería no retiene carga" data-costo="25">🔋 Batería ($25)</button>
+                                    <button type="button" class="quick-template-btn" data-falla="Pin de carga dañado" data-costo="20">🔌 Pin de Carga ($20)</button>
+                                    <button type="button" class="quick-template-btn" data-falla="Limpieza interna y pasta térmica" data-costo="18">🧹 Limpieza/Térmica ($18)</button>
+                                    <button type="button" class="quick-template-btn" data-falla="Formateo de sistema operativo y drivers" data-costo="25">💻 Formateo OS ($25)</button>
+                                </div>
+                            </div>
+
+                            <!-- Patrón o PIN de Seguridad -->
+                            <h4 style="font-size: 0.95rem; color: var(--accent-purple); margin-top: 16px; margin-bottom: 10px; border-bottom: 1px solid var(--border-glass); padding-bottom: 4px;">🔒 3. Desbloqueo / Patrón o PIN</h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center;">
+                                <div class="pattern-container">
+                                    <span style="font-size: 0.8rem; color: var(--text-secondary);">Marcar Patrón 3x3:</span>
+                                    <div class="pattern-grid" id="patternGrid">
+                                        <div class="pattern-node" data-num="1">1</div>
+                                        <div class="pattern-node" data-num="2">2</div>
+                                        <div class="pattern-node" data-num="3">3</div>
+                                        <div class="pattern-node" data-num="4">4</div>
+                                        <div class="pattern-node" data-num="5">5</div>
+                                        <div class="pattern-node" data-num="6">6</div>
+                                        <div class="pattern-node" data-num="7">7</div>
+                                        <div class="pattern-node" data-num="8">8</div>
+                                        <div class="pattern-node" data-num="9">9</div>
+                                    </div>
+                                    <button type="button" class="btn btn-secondary" id="clearPatternBtn" style="padding: 4px 10px; font-size: 0.75rem;">Limpiar Patrón</button>
+                                </div>
+
+                                <div>
+                                    <div class="form-group">
+                                        <label for="ordPatternString">Patrón Registrado</label>
+                                        <input type="text" id="ordPatternString" class="form-input" readonly placeholder="Ninguno" style="font-family: monospace;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ordPinCode">PIN o Contraseña Numérica</label>
+                                        <input type="text" id="ordPinCode" class="form-input" placeholder="Ej: 1234 ó N/A">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <input type="hidden" id="ordEditId" value="">
+                        </form>
+                    </div>
+
+                    <!-- Columna Derecha: Resumen Financiero, Estado y Acciones -->
+                    <div class="glass-card contact-form" style="height: fit-content;">
+                        <h4 style="font-size: 0.95rem; color: var(--accent-purple); margin-bottom: 12px; border-bottom: 1px solid var(--border-glass); padding-bottom: 4px;">📊 4. Estado y Cotización Financiera</h4>
+                        
+                        <div class="form-group">
+                            <label for="ordStatus">Estado Técnico de la Orden *</label>
+                            <select id="ordStatus" class="form-select" required style="font-weight: 600;">
+                                <option value="recibido">🔵 Recibido / En espera</option>
+                                <option value="diagnostico">🟣 En Diagnóstico Técnico</option>
+                                <option value="reparacion">🟠 En Reparación</option>
+                                <option value="listo">🟢 Listo para Entrega</option>
+                                <option value="entregado">⚪ Entregado al Cliente</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="form-group">
+                                <label for="ordLaborCost">Mano de Obra ($)</label>
+                                <input type="number" id="ordLaborCost" class="form-input" min="0" step="0.5" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="ordPartsCost">Repuestos ($)</label>
+                                <input type="number" id="ordPartsCost" class="form-input" min="0" step="0.5" value="0">
+                            </div>
+                        </div>
+
+                        <div class="form-group-row" style="display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 6px;">
+                            <div class="form-group">
+                                <label for="ordDiscount">Descuento ($)</label>
+                                <input type="number" id="ordDiscount" class="form-input" min="0" step="0.5" value="0" placeholder="0">
+                            </div>
+                        </div>
+
+                        <div style="background: rgba(0, 0, 0, 0.4); padding: 14px; border-radius: 8px; margin-top: 14px; border: 1px solid var(--border-glass);">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 4px;">
+                                <span>Subtotal:</span>
+                                <strong id="lblSubtotal">$0.00</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px; color: var(--text-muted);">
+                                <span>Descuento:</span>
+                                <span id="lblAdjustments">$0.00</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 1.25rem; font-weight: 800; color: var(--success); border-top: 1px solid var(--border-glass); padding-top: 8px;">
+                                <span>Total Final:</span>
+                                <strong id="lblTotalAmount">$0.00</strong>
+                            </div>
+                        </div>
+
+                        <!-- Botones de Acción -->
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
+                            <button type="button" class="btn btn-primary" id="btnSaveOrder" style="width: 100%;">
+                                💾 Guardar Orden de Servicio
+                            </button>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <button type="button" class="btn btn-secondary" id="btnPrintPdf">📄 Imprimir PDF</button>
+                                <button type="button" class="btn btn-secondary" id="btnPrintTicket">🧾 Ticket 80mm</button>
+                            </div>
+
+                            <button type="button" class="btn btn-secondary" id="btnSendWhatsapp" style="border-color: #10b981; color: #10b981;">
+                                💬 Enviar Avance por WhatsApp
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==========================================
+               MÓDULO 2: ÓRDENES GUARDADAS
+               ========================================== -->
+            <div id="mod-ordenes-guardadas" class="module-content" style="display: none;">
                 <div class="glass-card table-panel">
-                    <h3>Órdenes Técnicas Activas</h3>
-                    <div class="table-responsive" style="margin-top: 16px;">
+                    
+                    <!-- Barra de Buscador y Filtros -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">
+                        <h3>Listado General de Órdenes Guardadas</h3>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <input type="text" id="searchOrdersInput" class="form-input" placeholder="🔍 Buscar cliente, código, IMEI..." style="width: 250px;">
+                            <select id="filterStatusSelect" class="form-select" style="width: 180px;">
+                                <option value="ALL">Todos los Estados</option>
+                                <option value="recibido">🔵 Recibido</option>
+                                <option value="diagnostico">🟣 En Diagnóstico</option>
+                                <option value="reparacion">🟠 En Reparación</option>
+                                <option value="listo">🟢 Listo</option>
+                                <option value="entregado">⚪ Entregado</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Órdenes -->
+                    <div class="table-responsive">
                         <table class="portal-table">
                             <thead>
                                 <tr>
                                     <th>Código</th>
                                     <th>Cliente</th>
-                                    <th>Equipo</th>
-                                    <th>Falla</th>
+                                    <th>Dispositivo / IMEI</th>
+                                    <th>Falla Declarada</th>
                                     <th>Estado</th>
+                                    <th>Total ($)</th>
+                                    <th>Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody id="techOrdersTableBody">
-                                <!-- Se carga dinámicamente desde la API -->
+                            <tbody id="savedOrdersTableBody">
+                                <!-- Se llena dinámicamente -->
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
+
         </div>
     </section>
+
+    <!-- MODAL DE VISTA PREVIA E IMPRESIÓN (TICKET 80MM / PDF) -->
+    <div class="print-modal" id="printModal" style="display: none;">
+        <div class="print-preview-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #ddd; padding-bottom: 8px;">
+                <h4 style="margin:0;">Comprobante de Servicio Técnico</h4>
+                <button type="button" id="closePrintModalBtn" style="background:none; border:none; font-size: 1.2rem; cursor:pointer;">✖</button>
+            </div>
+            <div id="printTicketContent" class="ticket-80mm">
+                <!-- Se genera dinámicamente en JS -->
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 16px;">
+                <button type="button" class="btn btn-primary" id="btnExecutePrint" style="width: 100%;">🖨️ Imprimir Documento</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Footer -->
     <footer>
