@@ -98,9 +98,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadAndApplyStoreSettings();
     checkExpiredReservations();
 
-    const path = window.location.pathname.toLowerCase();
+    const path = window.location.pathname.toLowerCase().replace(/\/$/, '');
 
-    // Detectar página de forma robusta (soporta clean URLs y .html)
+    // Detectar página de forma robusta (soporta clean URLs, trailing slashes y .html)
     if (path.endsWith('reparaciones.html') || path.endsWith('/reparaciones')) {
         initRepairCalculator();
         initRepairTracker();
@@ -124,15 +124,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         initLogoutBtn();
         fetchOrdenes();
     } 
-    else if (path.endsWith('admin.html') || path.endsWith('/admin')) {
+    else if (path.endsWith('admin.html') || path.endsWith('/admin') || path.endsWith('admin')) {
         initTechnicalWorkshopModule();
         initAdminProductForm();
         initSettingsFormListener();
         initPOSModule();
+        initUserManagementModal();
         initLogoutBtn();
         fetchProductos(true); // Carga productos y renderiza tabla del administrador
         fetchOrdenes();
         fetchMovimientos();
+        updateAdminUnreadBadge();
     } 
     else if (path.endsWith('tienda.html') || path.endsWith('/tienda')) {
         await fetchProductos(true); // Carga productos y renderiza catálogo de tienda
@@ -1060,13 +1062,15 @@ function initAdminProductForm() {
         productForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
+            const prodSubmitBtn = document.getElementById('prodSubmitBtn');
             const id = document.getElementById('prodId').value;
             const name = document.getElementById('prodName').value;
             const price = parseFloat(document.getElementById('prodPrice').value);
             const stock = parseInt(document.getElementById('prodStock').value);
             const category = document.getElementById('prodCategory').value;
             const specs = document.getElementById('prodSpecs').value;
-            const imageFiles = document.getElementById('prodImage').files;
+            const prodImageInput = document.getElementById('prodImage');
+            const imageFiles = prodImageInput ? prodImageInput.files : [];
 
             if (price < 0 || stock < 0) {
                 showToast("Precio y Stock no pueden ser negativos.", "danger");
@@ -1080,10 +1084,15 @@ function initAdminProductForm() {
             formData.append('category', category);
             formData.append('specs', specs);
             
-            if (imageFiles.length > 0) {
+            if (imageFiles && imageFiles.length > 0) {
                 for (let i = 0; i < imageFiles.length; i++) {
                     formData.append('imagenes', imageFiles[i]);
                 }
+            }
+
+            if (prodSubmitBtn) {
+                prodSubmitBtn.disabled = true;
+                prodSubmitBtn.textContent = id ? "Guardando Cambios..." : "Publicando Producto...";
             }
 
             try {
@@ -1094,7 +1103,7 @@ function initAdminProductForm() {
                     url = `${API_URL}/api/productos/${id}`;
                     method = 'PUT';
                 } else {
-                    if (imageFiles.length === 0) {
+                    if (!imageFiles || imageFiles.length === 0) {
                         showToast("La foto de producto es obligatoria.", "danger");
                         return;
                     }
@@ -1106,21 +1115,34 @@ function initAdminProductForm() {
                 });
 
                 if (!res.ok) {
-                    const errData = await res.json();
-                    throw new Error(errData.error || (errData.errors ? errData.errors.join(', ') : "Fallo al guardar"));
+                    let errMsg = "Fallo al guardar producto";
+                    try {
+                        const errData = await res.json();
+                        errMsg = errData.error || (errData.errors ? errData.errors.join(', ') : errMsg);
+                    } catch (_) {
+                        errMsg = `Error ${res.status}: ${res.statusText}`;
+                    }
+                    throw new Error(errMsg);
                 }
 
                 const data = await res.json();
-                showToast(data.message);
+                showToast(data.message || "Producto procesado con éxito");
                 
                 resetProductForm();
                 await fetchProductos(true);
 
                 // Notificar en tiempo real a otras pestañas/páginas (como tienda.html)
-                broadcastChannel.postMessage({ type: 'product_updated' });
+                if (typeof broadcastChannel !== 'undefined') {
+                    broadcastChannel.postMessage({ type: 'product_updated' });
+                }
 
             } catch (err) {
                 showToast(err.message, "danger");
+            } finally {
+                if (prodSubmitBtn) {
+                    prodSubmitBtn.disabled = false;
+                    prodSubmitBtn.textContent = document.getElementById('prodId').value ? "Guardar Cambios" : "Publicar Producto";
+                }
             }
         });
     }
@@ -1140,6 +1162,11 @@ function resetProductForm() {
     document.getElementById('prodSubmitBtn').textContent = "Publicar Producto";
     document.getElementById('cancelEditBtn').style.display = 'none';
     document.getElementById('imageRequiredNotice').textContent = "Requerido para nuevos productos.";
+    
+    const prodImageInput = document.getElementById('prodImage');
+    if (prodImageInput) {
+        prodImageInput.setAttribute('required', 'required');
+    }
 
     const previewContainer = document.getElementById('editImagesPreview');
     if (previewContainer) {
@@ -2263,6 +2290,11 @@ function renderAdminProducts() {
                 document.getElementById('cancelEditBtn').style.display = 'inline-flex';
                 document.getElementById('imageRequiredNotice').textContent = "Opcional. Sube nuevas imágenes para reemplazar las actuales.";
 
+                const prodImageInput = document.getElementById('prodImage');
+                if (prodImageInput) {
+                    prodImageInput.removeAttribute('required');
+                }
+
                 const previewContainer = document.getElementById('editImagesPreview');
                 if (previewContainer) {
                     previewContainer.innerHTML = '';
@@ -2454,6 +2486,15 @@ async function renderReservationsAdmin() {
             });
         });
 
+        // 4. Renderizar el módulo de Chat en Vivo Messenger Admin
+        renderAdminChatModule();
+
+        // Escuchador botón recargar chats
+        document.getElementById('btnRefreshLiveChatAdmin')?.addEventListener('click', () => {
+            renderAdminChatModule();
+            showToast("Sala de Chat actualizada.");
+        });
+
     } catch (err) {
         console.error(err);
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);">Error al cargar las reservas.</td></tr>';
@@ -2495,19 +2536,41 @@ function showToast(message, type = "success") {
     }, 3500);
 }
 
-// ==========================================
-// FORMULARIOS CONTACTO (INDEX.HTML ONLY)
-// ==========================================
-// ==========================================
-// FORMULARIOS CONTACTO (INDEX.HTML ONLY)
-// ==========================================
 function initContactForms() {
     const contactForm = document.getElementById('contactForm');
     if (contactForm) {
         contactForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            const name = document.getElementById('contactName').value;
-            showToast(`¡Gracias, ${name}! Tu consulta ha sido recibida.`);
+            const nameEl = document.getElementById('contactName');
+            const emailEl = document.getElementById('contactEmail');
+            const messageEl = document.getElementById('contactMessage');
+
+            const name = nameEl ? nameEl.value.trim() : 'Cliente';
+            const email = emailEl ? emailEl.value.trim() : '';
+            const message = messageEl ? messageEl.value.trim() : '';
+
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('es-ES', { dateStyle: 'short' }) + ' ' + now.toLocaleTimeString('es-ES', { timeStyle: 'short' });
+
+            const newMsg = {
+                id: `MSG-${Date.now().toString().slice(-4)}`,
+                date: dateStr,
+                name: name,
+                email: email,
+                phone: '',
+                message: message,
+                status: 'Pendiente'
+            };
+
+            const list = getContactMessages();
+            list.unshift(newMsg);
+            saveContactMessages(list);
+
+            if (typeof broadcastChannel !== 'undefined') {
+                broadcastChannel.postMessage({ type: 'contact_message_received' });
+            }
+
+            showToast(`¡Gracias, ${name}! Tu mensaje ha sido enviado a la administración.`);
             contactForm.reset();
         });
     }
@@ -2769,7 +2832,7 @@ function renderUsersTable() {
     const users = getDrakotecUsers();
 
     if (users.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 12px;">No hay usuarios registrados.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 12px;">No hay roles registrados.</td></tr>`;
         return;
     }
 
@@ -2788,115 +2851,41 @@ function renderUsersTable() {
             </td>
             <td>${roleBadge}</td>
             <td>
-                <div style="display: flex; gap: 4px;">
-                    <button type="button" class="btn btn-secondary" onclick="editarUsuarioGlobal(${index})" style="padding: 2px 6px; font-size: 0.75rem;">✏️ Editar</button>
-                    <button type="button" class="btn btn-secondary" onclick="eliminarUsuarioGlobal(${index})" style="padding: 2px 6px; font-size: 0.75rem; color: #ef4444; border-color: #ef4444;">🗑️ Borrar</button>
-                </div>
+                <input type="password" id="userPassInput_${index}" class="form-input" value="${u.pass || ''}" placeholder="Nueva contraseña" style="padding: 6px 10px; font-size: 0.85rem; max-width: 160px;">
+            </td>
+            <td style="text-align: center;">
+                <button type="button" class="btn btn-primary" onclick="guardarPasswordRol(${index})" style="padding: 6px 14px; font-size: 0.8rem; font-weight: bold; white-space: nowrap;">💾 Guardar</button>
             </td>
         `;
         tbody.appendChild(tr);
     });
 }
 
-function abrirModalNuevoUsuario() {
-    const modal = document.getElementById('modalUsuario');
-    const form = document.getElementById('formUsuario');
-    if (!modal || !form) return;
+function guardarPasswordRol(index) {
+    const passInput = document.getElementById(`userPassInput_${index}`);
+    if (!passInput) return;
 
-    if (document.getElementById('modalUsuarioTitle')) {
-        document.getElementById('modalUsuarioTitle').textContent = '👤 Crear Nuevo Usuario / Rol';
-    }
-    if (document.getElementById('userFormIndex')) {
-        document.getElementById('userFormIndex').value = "-1";
-    }
-    form.reset();
-    modal.style.display = 'flex';
-}
-
-function editarUsuarioGlobal(index) {
-    const users = getDrakotecUsers();
-    const u = users[index];
-    const modal = document.getElementById('modalUsuario');
-    if (!u || !modal) return;
-
-    if (document.getElementById('modalUsuarioTitle')) {
-        document.getElementById('modalUsuarioTitle').textContent = '✏️ Editar Usuario / Rol';
-    }
-    if (document.getElementById('userFormIndex')) document.getElementById('userFormIndex').value = index;
-    if (document.getElementById('usrNombre')) document.getElementById('usrNombre').value = u.name || '';
-    if (document.getElementById('usrUsername')) document.getElementById('usrUsername').value = u.username || '';
-    if (document.getElementById('usrRole')) document.getElementById('usrRole').value = u.role || 'tecnico';
-    if (document.getElementById('usrPassword')) document.getElementById('usrPassword').value = u.pass || '';
-
-    modal.style.display = 'flex';
-}
-
-function eliminarUsuarioGlobal(index) {
-    const usersList = getDrakotecUsers();
-    const u = usersList[index];
-
-    if (usersList.length <= 1) {
-        if (typeof showToast === 'function') showToast("⚠️ Debe existir al menos un usuario en el sistema.", "danger");
-        else alert("Debe existir al menos un usuario en el sistema.");
+    const newPass = passInput.value.trim();
+    if (!newPass) {
+        if (typeof showToast === 'function') showToast("La contraseña no puede estar vacía.", "danger");
+        else alert("La contraseña no puede estar vacía.");
         return;
     }
 
-    if (confirm(`¿Estás seguro de eliminar el usuario @${u.username} (${u.name})?`)) {
-        usersList.splice(index, 1);
+    const usersList = getDrakotecUsers();
+    if (usersList[index]) {
+        usersList[index].pass = newPass;
         saveDrakotecUsers(usersList);
-        if (typeof showToast === 'function') showToast(`Usuario @${u.username} eliminado.`);
-        renderUsersTable();
+        if (typeof showToast === 'function') {
+            showToast(`✅ Contraseña de ${usersList[index].name || usersList[index].username} actualizada con éxito.`);
+        } else {
+            alert(`Contraseña actualizada para ${usersList[index].name || usersList[index].username}`);
+        }
     }
 }
 
-function guardarUsuarioSubmit(event) {
-    if (event) event.preventDefault();
-
-    const idxEl = document.getElementById('userFormIndex');
-    const nameEl = document.getElementById('usrNombre');
-    const usernameEl = document.getElementById('usrUsername');
-    const roleEl = document.getElementById('usrRole');
-    const passEl = document.getElementById('usrPassword');
-
-    if (!nameEl || !usernameEl || !passEl) return;
-
-    const idx = parseInt(idxEl.value);
-    const name = nameEl.value.trim();
-    const username = usernameEl.value.trim().toLowerCase();
-    const role = roleEl.value;
-    const pass = passEl.value.trim();
-
-    if (!name || !username || !pass) {
-        if (typeof showToast === 'function') showToast("Completa todos los campos obligatorios.", "danger");
-        else alert("Completa todos los campos obligatorios.");
-        return;
-    }
-
-    const usersList = getDrakotecUsers();
-
-    // Validar username único al crear
-    if (idx === -1 && usersList.some(u => u.username.toLowerCase() === username)) {
-        if (typeof showToast === 'function') showToast("El nombre de usuario ya está registrado.", "danger");
-        else alert("El nombre de usuario ya está registrado.");
-        return;
-    }
-
-    const newUserObj = { name, username, role, pass };
-
-    if (idx >= 0 && idx < usersList.length) {
-        usersList[idx] = newUserObj;
-        if (typeof showToast === 'function') showToast(`✅ Usuario @${username} actualizado correctamente.`);
-    } else {
-        usersList.push(newUserObj);
-        if (typeof showToast === 'function') showToast(`✅ Nuevo usuario @${username} (${role === 'admin' ? 'Administrador' : 'Técnico'}) creado.`);
-    }
-
-    saveDrakotecUsers(usersList);
-    renderUsersTable();
-
-    const modal = document.getElementById('modalUsuario');
-    if (modal) modal.style.display = 'none';
-}
+// Exportar función global para el botón de guardar en la tabla
+window.guardarPasswordRol = guardarPasswordRol;
 
 function initUserManagementModal() {
     renderUsersTable();
@@ -2920,6 +2909,15 @@ broadcastChannel.addEventListener('message', async (event) => {
         } else if (path.endsWith('admin.html') || path.endsWith('/admin')) {
             await fetchProductos(true);
         }
+    } else if (event.data.type === 'live_chat_updated') {
+        const path = window.location.pathname.toLowerCase();
+        if (path.endsWith('admin.html') || path.endsWith('/admin')) {
+            renderAdminChatModule();
+            updateAdminUnreadBadge();
+        }
+        if (document.getElementById('customerChatContainer')) {
+            renderCustomerChatModule();
+        }
     }
 });
 
@@ -2929,6 +2927,15 @@ window.addEventListener('storage', async (event) => {
         await fetchOrdenes();
         renderSavedOrders();
         renderTechOrders();
+    } else if (event.key === 'drakotec_live_chats') {
+        updateAdminUnreadBadge();
+        const path = window.location.pathname.toLowerCase();
+        if (path.endsWith('admin.html') || path.endsWith('/admin')) {
+            renderAdminChatModule();
+        }
+        if (document.getElementById('customerChatContainer')) {
+            renderCustomerChatModule();
+        }
     }
 });
 
@@ -2936,3 +2943,444 @@ window.addEventListener('storage', async (event) => {
 async function checkExpiredReservations() {
     // El servidor maneja el vencimiento y liberación de stock automáticamente cada 30 segundos
 }
+
+// ==========================================
+// MÓDULO DE SALA DE CHAT MESSENGER EN TIEMPO REAL (CLIENTES <-> ADMIN)
+// ==========================================
+const DEFAULT_LIVE_CHATS = {
+    "carlos.mendoza@gmail.com": {
+        id: "carlos.mendoza@gmail.com",
+        clientName: "Carlos Mendoza",
+        clientEmail: "carlos.mendoza@gmail.com",
+        clientPhone: "+58 414 9876543",
+        unreadAdmin: 1,
+        unreadClient: 0,
+        lastTime: "18:35",
+        messages: [
+            { sender: "client", text: "Buenas tardes, ¿tienen disponibilidad de pantalla original para Samsung S24 Ultra?", time: "18:30" },
+            { sender: "admin", text: "¡Hola Carlos! Sí, disponemos del módulo de pantalla original con instalación en 2 horas.", time: "18:32" },
+            { sender: "client", text: "Excelente, ¿qué costo tiene y dan garantía?", time: "18:35" }
+        ]
+    },
+    "mariana.torres@hotmail.com": {
+        id: "mariana.torres@hotmail.com",
+        clientName: "Mariana Torres",
+        clientEmail: "mariana.torres@hotmail.com",
+        clientPhone: "+58 412 5551234",
+        unreadAdmin: 0,
+        unreadClient: 0,
+        lastTime: "15:15",
+        messages: [
+            { sender: "client", text: "Hola, quisiera saber si tienen disponible el iPhone 15 Pro Max de 256GB en color Titanio.", time: "15:10" },
+            { sender: "admin", text: "¡Hola Mariana! Sí, lo tenemos en tienda disponible para retiro inmediato o reserva.", time: "15:15" }
+        ]
+    }
+};
+
+function getLiveChats() {
+    return JSON.parse(localStorage.getItem('drakotec_live_chats')) || DEFAULT_LIVE_CHATS;
+}
+
+function saveLiveChats(chats) {
+    localStorage.setItem('drakotec_live_chats', JSON.stringify(chats));
+    updateAdminUnreadBadge();
+}
+
+function getCustomerSession() {
+    return JSON.parse(localStorage.getItem('drakotec_chat_customer_session')) || null;
+}
+
+function saveCustomerSession(session) {
+    localStorage.setItem('drakotec_chat_customer_session', JSON.stringify(session));
+}
+
+// --- INTERFAZ DEL CLIENTE (CONTACTO.HTML / CUALQUIER PÁGINA) ---
+function initContactForms() {
+    renderCustomerChatModule();
+}
+
+function renderCustomerChatModule() {
+    const container = document.getElementById('customerChatContainer');
+    if (!container) return;
+
+    const session = getCustomerSession();
+
+    if (!session) {
+        // Formulario de Registro / Identificación Inicial
+        container.innerHTML = `
+            <h3>💬 Chat de Atención en Vivo</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Regístrate una sola vez para enviar tus dudas y chatear con soporte en vivo.</p>
+            <form id="customerRegisterForm" style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="form-group" style="margin:0;">
+                    <label for="chatRegName">Nombre Completo *</label>
+                    <input type="text" id="chatRegName" class="form-input" required placeholder="Ej: Juan Pérez">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label for="chatRegEmail">Correo Electrónico (Tu ID de Chat) *</label>
+                    <input type="email" id="chatRegEmail" class="form-input" required placeholder="ejemplo@correo.com">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label for="chatRegPhone">Teléfono / WhatsApp (Opcional)</label>
+                    <input type="text" id="chatRegPhone" class="form-input" placeholder="Ej: +58 414 1234567">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label for="chatRegMsg">Tu Consulta Inicial *</label>
+                    <textarea id="chatRegMsg" class="form-input" rows="3" required placeholder="Escribe tu duda sobre un producto o reparación..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; font-weight: bold; margin-top: 6px;">🚀 Iniciar Chat en Vivo</button>
+            </form>
+        `;
+
+        const regForm = document.getElementById('customerRegisterForm');
+        if (regForm) {
+            regForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = document.getElementById('chatRegName').value.trim();
+                const email = document.getElementById('chatRegEmail').value.trim().toLowerCase();
+                const phone = document.getElementById('chatRegPhone').value.trim();
+                const msgText = document.getElementById('chatRegMsg').value.trim();
+
+                if (!name || !email || !msgText) return;
+
+                const newSession = { name, email, phone };
+                saveCustomerSession(newSession);
+
+                const chats = getLiveChats();
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+                if (!chats[email]) {
+                    chats[email] = {
+                        id: email,
+                        clientName: name,
+                        clientEmail: email,
+                        clientPhone: phone,
+                        unreadAdmin: 1,
+                        unreadClient: 0,
+                        lastTime: timeStr,
+                        messages: []
+                    };
+                }
+
+                chats[email].messages.push({
+                    sender: "client",
+                    text: msgText,
+                    time: timeStr
+                });
+                chats[email].unreadAdmin += 1;
+                chats[email].lastTime = timeStr;
+
+                saveLiveChats(chats);
+
+                if (typeof broadcastChannel !== 'undefined') {
+                    broadcastChannel.postMessage({ type: 'live_chat_updated' });
+                }
+
+                showToast(`¡Bienvenido ${name}! Tu chat ha sido iniciado.`);
+                renderCustomerChatModule();
+            });
+        }
+
+    } else {
+        // Ventana de Chat Activo del Cliente
+        const chats = getLiveChats();
+        const customerChat = chats[session.email] || { messages: [] };
+
+        // Marcar mensajes como leídos por el cliente
+        if (customerChat.unreadClient > 0) {
+            customerChat.unreadClient = 0;
+            chats[session.email] = customerChat;
+            saveLiveChats(chats);
+        }
+
+        let messagesHtml = '';
+        if (customerChat.messages.length === 0) {
+            messagesHtml = `<p style="text-align: center; color: var(--text-muted); margin: auto;">No hay mensajes aún. Escribe tu primera duda abajo.</p>`;
+        } else {
+            customerChat.messages.forEach(m => {
+                const isClient = m.sender === 'client';
+                messagesHtml += `
+                    <div style="display: flex; flex-direction: column; align-items: ${isClient ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
+                        <div style="background: ${isClient ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.08)'}; color: white; padding: 8px 14px; border-radius: ${isClient ? '14px 14px 2px 14px' : '14px 14px 14px 2px'}; max-width: 80%; font-size: 0.88rem; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                            <span style="font-size:0.75rem; font-weight:700; display:block; color:${isClient ? '#a7f3d0' : '#60a5fa'}; margin-bottom:2px;">
+                                ${isClient ? 'Tú' : 'Soporte Drakotec'}
+                            </span>
+                            ${m.text}
+                        </div>
+                        <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">${m.time}</span>
+                    </div>
+                `;
+            });
+        }
+
+        container.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px; margin-bottom: 10px;">
+                <div>
+                    <h3 style="margin:0; font-size: 1.05rem; color: var(--primary-color);">💬 Chat en Vivo</h3>
+                    <span style="font-size: 0.78rem; color: #34d399;">👤 Sesión: <strong>${session.name}</strong> (${session.email})</span>
+                </div>
+                <button type="button" class="btn btn-secondary" id="btnCustomerLogoutChat" style="font-size: 0.75rem; padding: 3px 8px;">🔒 Cambiar Usuario</button>
+            </div>
+
+            <div id="customerChatBoxScroll" style="flex: 1; min-height: 240px; max-height: 280px; overflow-y: auto; background: rgba(0,0,0,0.25); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; margin-bottom: 10px;">
+                ${messagesHtml}
+            </div>
+
+            <form id="customerSendMsgForm" style="display: flex; gap: 8px;">
+                <input type="text" id="customerMsgInput" class="form-input" required placeholder="Escribe tu mensaje o duda..." style="flex: 1; font-size: 0.88rem;">
+                <button type="submit" class="btn btn-primary" style="padding: 8px 16px; font-weight: bold;">Enviar</button>
+            </form>
+        `;
+
+        const scrollBox = document.getElementById('customerChatBoxScroll');
+        if (scrollBox) scrollBox.scrollTop = scrollBox.scrollHeight;
+
+        document.getElementById('btnCustomerLogoutChat')?.addEventListener('click', () => {
+            localStorage.removeItem('drakotec_chat_customer_session');
+            showToast("Sesión de chat cerrada.");
+            renderCustomerChatModule();
+        });
+
+        const sendForm = document.getElementById('customerSendMsgForm');
+        if (sendForm) {
+            sendForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const input = document.getElementById('customerMsgInput');
+                const text = input ? input.value.trim() : '';
+                if (!text) return;
+
+                const chats = getLiveChats();
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+                if (!chats[session.email]) {
+                    chats[session.email] = {
+                        id: session.email,
+                        clientName: session.name,
+                        clientEmail: session.email,
+                        clientPhone: session.phone || '',
+                        unreadAdmin: 0,
+                        unreadClient: 0,
+                        lastTime: timeStr,
+                        messages: []
+                    };
+                }
+
+                chats[session.email].messages.push({
+                    sender: "client",
+                    text: text,
+                    time: timeStr
+                });
+                chats[session.email].unreadAdmin = (chats[session.email].unreadAdmin || 0) + 1;
+                chats[session.email].lastTime = timeStr;
+
+                saveLiveChats(chats);
+
+                if (typeof broadcastChannel !== 'undefined') {
+                    broadcastChannel.postMessage({ type: 'live_chat_updated' });
+                }
+
+                input.value = '';
+                renderCustomerChatModule();
+            });
+        }
+    }
+}
+
+// --- INTERFAZ DEL ADMINISTRADOR (ADMIN.HTML - SALA MULTICHAT) ---
+let activeAdminChatId = null;
+
+function renderAdminChatModule() {
+    const listContainer = document.getElementById('adminChatListContainer');
+    const windowBox = document.getElementById('adminChatWindow');
+    if (!listContainer || !windowBox) return;
+
+    const chats = getLiveChats();
+    const chatKeys = Object.keys(chats);
+
+    // 1. Renderizar Lista Izquierda de Clientes
+    listContainer.innerHTML = '';
+    if (chatKeys.length === 0) {
+        listContainer.innerHTML = `<p style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 10px;">No hay chats iniciados.</p>`;
+    } else {
+        // Seleccionar primer chat si no hay ninguno activo
+        if (!activeAdminChatId || !chats[activeAdminChatId]) {
+            activeAdminChatId = chatKeys[0];
+        }
+
+        chatKeys.forEach(key => {
+            const chat = chats[key];
+            const isSelected = key === activeAdminChatId;
+            const lastMsg = chat.messages && chat.messages.length > 0 ? chat.messages[chat.messages.length - 1].text : 'Sin mensajes';
+            const hasUnread = chat.unreadAdmin > 0;
+
+            const card = document.createElement('div');
+            card.style.cssText = `
+                padding: 10px;
+                border-radius: 8px;
+                cursor: pointer;
+                background: ${isSelected ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.03)'};
+                border: 1px solid ${isSelected ? '#8b5cf6' : 'rgba(255,255,255,0.06)'};
+                transition: all 0.2s ease;
+            `;
+
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <strong style="font-size: 0.85rem; color: ${isSelected ? '#c084fc' : 'var(--text-color)'};">${chat.clientName}</strong>
+                    <span style="font-size: 0.7rem; color: var(--text-muted);">${chat.lastTime || ''}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.78rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;">${lastMsg}</span>
+                    ${hasUnread ? `<span class="status-badge" style="background: #ef4444; color: white; padding: 1px 6px; font-size: 0.7rem;">${chat.unreadAdmin}</span>` : ''}
+                </div>
+            `;
+
+            card.addEventListener('click', () => {
+                activeAdminChatId = key;
+                chats[key].unreadAdmin = 0;
+                saveLiveChats(chats);
+                renderAdminChatModule();
+            });
+
+            listContainer.appendChild(card);
+        });
+    }
+
+    // 2. Renderizar Ventana Derecha de Chat Activo
+    if (!activeAdminChatId || !chats[activeAdminChatId]) {
+        windowBox.innerHTML = `
+            <div style="text-align: center; color: var(--text-muted); margin: auto; padding: 20px;">
+                <p style="font-size: 1.1rem; font-weight: 600; color: var(--text-color); margin-bottom: 6px;">💬 Selecciona un cliente de la lista</p>
+                <span style="font-size: 0.85rem;">Podrás ver sus dudas registradas y responderle en vivo en tiempo real.</span>
+            </div>
+        `;
+        return;
+    }
+
+    const currentChat = chats[activeAdminChatId];
+    const cleanPhone = (currentChat.clientPhone || '').replace(/\D/g, '');
+    const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}` : null;
+
+    let threadHtml = '';
+    if (!currentChat.messages || currentChat.messages.length === 0) {
+        threadHtml = `<p style="text-align: center; color: var(--text-muted); margin: auto;">Sin mensajes en esta conversación.</p>`;
+    } else {
+        currentChat.messages.forEach(m => {
+            const isAdmin = m.sender === 'admin';
+            threadHtml += `
+                <div style="display: flex; flex-direction: column; align-items: ${isAdmin ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
+                    <div style="background: ${isAdmin ? 'linear-gradient(135deg, #7c3aed, #a855f7)' : 'rgba(255,255,255,0.08)'}; color: white; padding: 8px 14px; border-radius: ${isAdmin ? '14px 14px 2px 14px' : '14px 14px 14px 2px'}; max-width: 80%; font-size: 0.88rem; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                        <span style="font-size:0.75rem; font-weight:700; display:block; color:${isAdmin ? '#e9d5ff' : '#60a5fa'}; margin-bottom:2px;">
+                            ${isAdmin ? 'Soporte (Tú)' : currentChat.clientName}
+                        </span>
+                        ${m.text}
+                    </div>
+                    <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">${m.time}</span>
+                </div>
+            `;
+        });
+    }
+
+    windowBox.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; margin-bottom: 10px;">
+            <div>
+                <strong style="font-size: 0.95rem; color: var(--primary-color);">👤 ${currentChat.clientName}</strong>
+                <span style="font-size: 0.78rem; color: var(--text-muted); margin-left: 8px;">(${currentChat.clientEmail})</span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+                ${waUrl ? `<a href="${waUrl}" target="_blank" class="btn btn-secondary" style="font-size: 0.75rem; padding: 3px 8px; color: #34d399; border-color: #34d399; text-decoration: none;">📱 WhatsApp Web</a>` : ''}
+                <button type="button" class="btn btn-secondary" onclick="deleteLiveChat('${activeAdminChatId}')" style="font-size: 0.75rem; padding: 3px 8px; color: #ef4444; border-color: #ef4444; cursor: pointer;" title="Eliminar este Chat">🗑️ Borrar Chat</button>
+            </div>
+        </div>
+
+        <div id="adminChatThreadScroll" style="flex: 1; min-height: 280px; max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; margin-bottom: 10px;">
+            ${threadHtml}
+        </div>
+
+        <form id="adminSendReplyForm" style="display: flex; gap: 8px;">
+            <input type="text" id="adminReplyInput" class="form-input" required placeholder="Escribe tu respuesta para ${currentChat.clientName}..." style="flex: 1; font-size: 0.88rem;">
+            <button type="submit" class="btn btn-primary" style="padding: 8px 18px; font-weight: bold; background: linear-gradient(135deg, #7c3aed, #6366f1);">Enviar Respuesta</button>
+        </form>
+    `;
+
+    updateAdminUnreadBadge();
+
+    const scrollBox = document.getElementById('adminChatThreadScroll');
+    if (scrollBox) scrollBox.scrollTop = scrollBox.scrollHeight;
+
+    const replyForm = document.getElementById('adminSendReplyForm');
+    if (replyForm) {
+        replyForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const input = document.getElementById('adminReplyInput');
+            const text = input ? input.value.trim() : '';
+            if (!text) return;
+
+            const chats = getLiveChats();
+            if (chats[activeAdminChatId]) {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+                chats[activeAdminChatId].messages.push({
+                    sender: "admin",
+                    text: text,
+                    time: timeStr
+                });
+                chats[activeAdminChatId].unreadClient = (chats[activeAdminChatId].unreadClient || 0) + 1;
+                chats[activeAdminChatId].lastTime = timeStr;
+
+                saveLiveChats(chats);
+
+                if (typeof broadcastChannel !== 'undefined') {
+                    broadcastChannel.postMessage({ type: 'live_chat_updated' });
+                }
+
+                input.value = '';
+                renderAdminChatModule();
+            }
+        });
+    }
+}
+
+function updateAdminUnreadBadge() {
+    const badge = document.getElementById('unreadContactBadge');
+    if (!badge) return;
+
+    const chats = getLiveChats();
+    const totalUnread = Object.values(chats).reduce((acc, chat) => acc + (chat.unreadAdmin || 0), 0);
+
+    if (totalUnread > 0) {
+        badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
+        badge.style.display = 'inline-block';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+function deleteLiveChat(chatId) {
+    const chats = getLiveChats();
+    const targetChat = chats[chatId];
+    const clientName = targetChat ? targetChat.clientName : chatId;
+
+    if (confirm(`¿Estás seguro de eliminar todo el historial de chat de ${clientName}?`)) {
+        delete chats[chatId];
+        saveLiveChats(chats);
+
+        const remainingKeys = Object.keys(chats);
+        activeAdminChatId = remainingKeys.length > 0 ? remainingKeys[0] : null;
+
+        if (typeof broadcastChannel !== 'undefined') {
+            broadcastChannel.postMessage({ type: 'live_chat_updated' });
+        }
+
+        if (typeof showToast === 'function') {
+            showToast(`Chat de ${clientName} eliminado con éxito.`);
+        }
+
+        renderAdminChatModule();
+        updateAdminUnreadBadge();
+    }
+}
+
+window.deleteLiveChat = deleteLiveChat;
+
