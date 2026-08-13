@@ -2354,151 +2354,151 @@ async function renderReservationsAdmin() {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Cargando reservas...</td></tr>';
     logsContainer.innerHTML = '<p style="text-align:center;color:var(--text-muted);">Cargando historial...</p>';
 
+    // 1. Obtener y pintar reservas (con manejo de errores independiente)
     try {
-        // 1. Obtener y pintar reservas
         const res = await fetch(`${API_URL}/api/reservas`);
-        if (!res.ok) throw new Error("Error al obtener reservas");
-        const reservas = await res.json();
+        if (res.ok) {
+            const reservas = await res.json();
+            tbody.innerHTML = '';
+            if (reservas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">No hay reservas registradas.</td></tr>';
+            } else {
+                reservas.forEach(r => {
+                    const tr = document.createElement('tr');
+                    const itemsText = r.items.map(i => `${i.name} (${i.quantity}x)`).join('<br>');
+                    const expiresDate = new Date(r.expiresAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+                    
+                    let statusBadge = '';
+                    if (r.status === 'activa') {
+                        statusBadge = '<span class="status-badge status-progress" style="background:rgba(217, 119, 6, 0.1);color:#d97706;border-color:rgba(217, 119, 6, 0.2);">Activa</span>';
+                    } else if (r.status === 'liberada') {
+                        statusBadge = '<span class="status-badge" style="background:rgba(239, 68, 68, 0.1);color:#ef4444;border-color:rgba(239, 68, 68, 0.2);">Liberada</span>';
+                    } else if (r.status === 'completada') {
+                        statusBadge = '<span class="status-badge" style="background:rgba(16, 185, 129, 0.1);color:#10b981;border-color:rgba(16, 185, 129, 0.2);">Completada</span>';
+                    }
 
-        tbody.innerHTML = '';
-        if (reservas.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">No hay reservas registradas.</td></tr>';
-        } else {
-            reservas.forEach(r => {
-                const tr = document.createElement('tr');
-                
-                // Formatear items de reserva
-                const itemsText = r.items.map(i => `${i.name} (${i.quantity}x)`).join('<br>');
-                
-                // Formatear fechas
-                const expiresDate = new Date(r.expiresAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
-                
-                // Badge de estado
-                let statusBadge = '';
-                if (r.status === 'activa') {
-                    statusBadge = '<span class="status-badge status-progress" style="background:rgba(217, 119, 6, 0.1);color:#d97706;border-color:rgba(217, 119, 6, 0.2);">Activa</span>';
-                } else if (r.status === 'liberada') {
-                    statusBadge = '<span class="status-badge" style="background:rgba(239, 68, 68, 0.1);color:#ef4444;border-color:rgba(239, 68, 68, 0.2);">Liberada</span>';
-                } else if (r.status === 'completada') {
-                    statusBadge = '<span class="status-badge" style="background:rgba(16, 185, 129, 0.1);color:#10b981;border-color:rgba(16, 185, 129, 0.2);">Completada</span>';
-                }
+                    let actionButtons = '-';
+                    if (r.status === 'activa') {
+                        actionButtons = `
+                            <button class="btn-edit-inline complete-reservation-btn" data-code="${r.code}" style="background:rgba(16, 185, 129, 0.1);color:#10b981;border-color:rgba(16, 185, 129, 0.2);">Vendido</button>
+                            <button class="btn-delete-inline release-reservation-btn" data-code="${r.code}" style="margin-left:5px;">Liberar</button>
+                        `;
+                    }
 
-                // Botones de acción (solo para activas)
-                let actionButtons = '-';
-                if (r.status === 'activa') {
-                    actionButtons = `
-                        <button class="btn-edit-inline complete-reservation-btn" data-code="${r.code}" style="background:rgba(16, 185, 129, 0.1);color:#10b981;border-color:rgba(16, 185, 129, 0.2);">Vendido</button>
-                        <button class="btn-delete-inline release-reservation-btn" data-code="${r.code}" style="margin-left:5px;">Liberar</button>
+                    tr.innerHTML = `
+                        <td style="font-family:monospace;font-weight:700;">${r.code}</td>
+                        <td>
+                            <strong>${r.clientName}</strong><br>
+                            <span style="font-size:0.8rem;color:var(--text-muted);">${r.clientPhone}</span>
+                        </td>
+                        <td style="font-size:0.85rem;">${itemsText}</td>
+                        <td style="font-size:0.8rem;">
+                            <strong>${expiresDate}</strong>
+                        </td>
+                        <td>${statusBadge}</td>
+                        <td>${actionButtons}</td>
                     `;
-                }
-
-                tr.innerHTML = `
-                    <td style="font-family:monospace;font-weight:700;">${r.code}</td>
-                    <td>
-                        <strong>${r.clientName}</strong><br>
-                        <span style="font-size:0.8rem;color:var(--text-muted);">${r.clientPhone}</span>
-                    </td>
-                    <td style="font-size:0.85rem;">${itemsText}</td>
-                    <td style="font-size:0.8rem;">
-                        <strong>${expiresDate}</strong>
-                    </td>
-                    <td>${statusBadge}</td>
-                    <td>${actionButtons}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        // 2. Obtener y pintar notificaciones de WhatsApp
-        const res2 = await fetch(`${API_URL}/api/notificaciones`);
-        if (!res2.ok) throw new Error("Error al obtener notificaciones");
-        const notifs = await res2.json();
-
-        logsContainer.innerHTML = '';
-        if (notifs.length === 0) {
-            logsContainer.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:0.9rem;padding:20px 0;">No hay notificaciones automáticas registradas.</p>';
+                    tbody.appendChild(tr);
+                });
+            }
         } else {
-            notifs.forEach(n => {
-                const date = new Date(n.sentAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
-                const div = document.createElement('div');
-                div.style.background = 'rgba(255,255,255,0.03)';
-                div.style.border = '1px solid var(--border-glass)';
-                div.style.borderRadius = '8px';
-                div.style.padding = '10px';
-                div.style.fontSize = '0.85rem';
-
-                div.innerHTML = `
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <span style="color:#10b981;font-weight:700;display:inline-flex;align-items:center;gap:4px;">🟢 WhatsApp Automatizado</span>
-                        <span style="font-size:0.75rem;color:var(--text-muted);">${date}</span>
-                    </div>
-                    <div style="margin-bottom:4px;">
-                        <strong>Cliente:</strong> ${n.recipientName} (${n.recipientPhone})
-                    </div>
-                    <div style="font-style:italic;background:rgba(0,0,0,0.2);padding:6px;border-radius:4px;color:var(--text-secondary);margin-top:4px;">
-                        "${n.message}"
-                    </div>
-                `;
-                logsContainer.appendChild(div);
-            });
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Sin reservas activas registradas.</td></tr>';
         }
-
-        // 3. Asignar manejadores de eventos a los botones de acción
-        tbody.querySelectorAll('.complete-reservation-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const code = btn.getAttribute('data-code');
-                if (confirm(`¿Marcar la reserva ${code} como completada (venta realizada)?`)) {
-                    try {
-                        const res = await fetch(`${API_URL}/api/reservas/${code}/completar`, { method: 'POST' });
-                        if (res.ok) {
-                            showToast(`Reserva ${code} marcada como completada.`);
-                            renderReservationsAdmin();
-                        } else {
-                            const errData = await res.json();
-                            showToast(errData.error || "Error al completar la reserva.", "danger");
-                        }
-                    } catch (err) {
-                        showToast("Error de conexión.", "danger");
-                    }
-                }
-            });
-        });
-
-        tbody.querySelectorAll('.release-reservation-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const code = btn.getAttribute('data-code');
-                if (confirm(`¿Estás seguro de liberar la reserva ${code}? Esto devolverá los productos al stock del inventario.`)) {
-                    try {
-                        const res = await fetch(`${API_URL}/api/reservas/${code}/liberar`, { method: 'POST' });
-                        if (res.ok) {
-                            showToast(`Reserva ${code} liberada con éxito y stock restaurado.`);
-                            // Notificar en tiempo real a otras pestañas de la tienda que el stock cambió
-                            broadcastChannel.postMessage({ type: 'product_updated' });
-                            renderReservationsAdmin();
-                        } else {
-                            const errData = await res.json();
-                            showToast(errData.error || "Error al liberar la reserva.", "danger");
-                        }
-                    } catch (err) {
-                        showToast("Error de conexión.", "danger");
-                    }
-                }
-            });
-        });
-
-        // 4. Renderizar el módulo de Chat en Vivo Messenger Admin
-        renderAdminChatModule();
-
-        // Escuchador botón recargar chats
-        document.getElementById('btnRefreshLiveChatAdmin')?.addEventListener('click', () => {
-            renderAdminChatModule();
-            showToast("Sala de Chat actualizada.");
-        });
-
     } catch (err) {
-        console.error(err);
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);">Error al cargar las reservas.</td></tr>';
+        console.warn("Módulo de reservas usando fallback:", err);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Sin reservas activas registradas.</td></tr>';
     }
+
+    // 2. Obtener y pintar notificaciones de WhatsApp
+    try {
+        const res2 = await fetch(`${API_URL}/api/notificaciones`);
+        if (res2.ok) {
+            const notifs = await res2.json();
+            logsContainer.innerHTML = '';
+            if (notifs.length === 0) {
+                logsContainer.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:0.9rem;padding:20px 0;">No hay notificaciones automáticas registradas.</p>';
+            } else {
+                notifs.forEach(n => {
+                    const date = new Date(n.sentAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+                    const div = document.createElement('div');
+                    div.style.background = 'rgba(255,255,255,0.03)';
+                    div.style.border = '1px solid var(--border-glass)';
+                    div.style.borderRadius = '8px';
+                    div.style.padding = '10px';
+                    div.style.fontSize = '0.85rem';
+
+                    div.innerHTML = `
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="color:#10b981;font-weight:700;display:inline-flex;align-items:center;gap:4px;">🟢 WhatsApp Automatizado</span>
+                            <span style="font-size:0.75rem;color:var(--text-muted);">${date}</span>
+                        </div>
+                        <div style="margin-bottom:4px;">
+                            <strong>Cliente:</strong> ${n.recipientName} (${n.recipientPhone})
+                        </div>
+                        <div style="font-style:italic;background:rgba(0,0,0,0.2);padding:6px;border-radius:4px;color:var(--text-secondary);margin-top:4px;">
+                            "${n.message}"
+                        </div>
+                    `;
+                    logsContainer.appendChild(div);
+                });
+            }
+        } else {
+            logsContainer.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:0.9rem;padding:20px 0;">Sin notificaciones automáticas activas.</p>';
+        }
+    } catch (err) {
+        logsContainer.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:0.9rem;padding:20px 0;">Historial de notificaciones no disponible.</p>';
+    }
+
+    // 3. Asignar manejadores a botones de reservas (si existen)
+    tbody.querySelectorAll('.complete-reservation-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const code = btn.getAttribute('data-code');
+            if (confirm(`¿Marcar la reserva ${code} como completada (venta realizada)?`)) {
+                try {
+                    const res = await fetch(`${API_URL}/api/reservas/${code}/completar`, { method: 'POST' });
+                    if (res.ok) {
+                        showToast(`Reserva ${code} marcada como completada.`);
+                        renderReservationsAdmin();
+                    } else {
+                        const errData = await res.json();
+                        showToast(errData.error || "Error al completar la reserva.", "danger");
+                    }
+                } catch (err) {
+                    showToast("Error de conexión.", "danger");
+                }
+            }
+        });
+    });
+
+    tbody.querySelectorAll('.release-reservation-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const code = btn.getAttribute('data-code');
+            if (confirm(`¿Estás seguro de liberar la reserva ${code}? Esto devolverá los productos al stock del inventario.`)) {
+                try {
+                    const res = await fetch(`${API_URL}/api/reservas/${code}/liberar`, { method: 'POST' });
+                    if (res.ok) {
+                        showToast(`Reserva ${code} liberada con éxito y stock restaurado.`);
+                        broadcastChannel.postMessage({ type: 'product_updated' });
+                        renderReservationsAdmin();
+                    } else {
+                        const errData = await res.json();
+                        showToast(errData.error || "Error al liberar la reserva.", "danger");
+                    }
+                } catch (err) {
+                    showToast("Error de conexión.", "danger");
+                }
+            }
+        });
+    });
+
+    // 4. Renderizar SIEMPRE el módulo de Chat en Vivo Messenger Admin
+    renderAdminChatModule();
+
+    // Escuchador botón recargar chats
+    document.getElementById('btnRefreshLiveChatAdmin')?.addEventListener('click', () => {
+        renderAdminChatModule();
+        showToast("Sala de Chat actualizada.");
+    });
 }
 
 // ==========================================
