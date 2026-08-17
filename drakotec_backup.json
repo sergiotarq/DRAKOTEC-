@@ -1,0 +1,363 @@
+{
+  "version": "2.0",
+  "exportedAt": "2026-08-17T13:07:46.830Z",
+  "system": "Drakotec Store",
+  "summary": {
+    "totalProductos": 12,
+    "totalOrdenes": 4,
+    "totalReservas": 0,
+    "totalMovimientos": 2,
+    "totalNotificaciones": 2
+  },
+  "data": {
+    "productos": [
+      {
+        "_id": "6a71e11e86a91a0a283bc4b1",
+        "id": 1,
+        "name": "Xiaomi Redmi Note 13 4G",
+        "category": "celulares",
+        "price": 1400,
+        "stock": 4,
+        "specs": "AMOLED 6.67\" 120Hz, Snapdragon 685, 8GB RAM, 256GB, Cámara 108 MP, Batería 5000 mAh (33W)",
+        "imagePath": "/uploads/1785848094317-465041097.jpeg",
+        "images": [
+          "/uploads/1785848094317-465041097.jpeg"
+        ],
+        "__v": 0,
+        "imagesData": [
+          {
+            "path": "/uploads/1785848094317-465041097.jpeg",
+            "base64": "/uploads/1785848094317-465041097.jpeg"
+          }
+        ]
+      },
+      {
+        "_id": "6a71e2ff86a91a0a283bc4b2",
+        "id": 2,
+        "name": "Xiaomi Redmi Note 13 Pro 4G",
+        "category": "celulares",
+        "price": 1800,
+        "stock": 2,
+        "specs": "AMOLED 6.67\" 120Hz, MediaTek Helio G99-Ultra, 8GB RAM, 256GB, Cámara 200 MP OIS, Batería 5000 mAh (67W).",
+        "imagePath": "/uploads/1785848575755-544174645.jpg",
+        "images": [
+          "/uploads/1785848575755-544174645.jpg"
+        ],
+        "__v": 0,
+        "imagesData": [
+          {
+            "path": "/uploads/1785848575755-544174645.jpg",
+            "base64": "/uploads/1785848575755-544174645.jpg"
+          }
+        ]
+      },
+      {
+        "_id": "6a71e3aa86a91a0a283bc4b3",
+        "id": 3,
+        "name": "Xiaomi Redmi Note 13 Pro 5G",
+        "category": "celulares",
+        "price": 2000,
+        "stock": 4,
+        "specs": "AMOLED 1.5K 120Hz, Snapdragon 7s Gen 2, 8GB/12GB RAM, 256GB, Cámara 200 MP OIS, Carga 67W.",
+        "imagePath": "/uploads/1785848746764-896231901.jpg",
+        "images": [
+          "/uploads/1785848746764-896231901.jpg"
+        ],
+        "__v": 0,
+        "imagesData": [
+          {
+            "path": "/uploads/1785848746764-896231901.jpg",
+            "base64": "/uploads/1785848746764-896231901.jpg"
+          }
+        ]
+      },
+      {
+        "_id": "6a71e47e86a91a0a283bc4b4",
+        "id": 4,
+        "name": "Xiaomi Redmi Note 13 Pro+ 5G",
+        "category": "celulares",
+        "price": 2450,
+        "stock": 2,
+        "specs": "Pantalla Curva AMOLED 1.5K, Dimensity 7200-Ultra, IP68, 12GB RAM, 256GB/512GB, Carga ultra 120W.",
+        "imagePath": "/uploads/1785848958390-548344837.jpg",
+        "images": [
+          "/uploads/1785848958390-548344837.jpg"
+        ],
+        "__v": 0,
+        "imagesData": [
+          {
+            "path": "/uploads/1785848958390-548344837.jpg",
+            "base64": "/uploads/1785848958390-548344837.jpg"
+          }
+        ]
+      },
+      {
+        "_id": "6a71e4fb86a91a0a283bc4b5",
+        "id": 5,
+        "name": "Xiaomi POCO M6 Pro 4G",
+        "category": "celulares",
+        "price": 1650,
+        "stock": 3,
+        "specs": "Flow AMOLED 120Hz, Helio G99-Ultra, 8GB/12GB RAM, 256GB/512GB, Cámara 64 MP OIS, Carga 67W.",
+        "imagePath": "/uploads/1785849083136-708617790.jpeg",
+        "images": [
+          "/uploads/1785849083136-708617790.jpeg"
+        ],
+        "__v": 0,
+        "imagesData": [
+          {
+            "path": "/uploads/1785849083136-708617790.jpeg",
+            "base64": "/uploads/1785849083136-708617790.jpeg"
+          }
+        ]
+      },
+      {
+        "_id": "6a71e59a86a91a0a283bc4b6",
+        "id": 6,
+        "name": "Xiaomi POCO X6 5G",
+        "category": "celulares",
+        "price": 1900,
+        "stock": 3,
+        "specs": "Flow AMOLED 1.5K 120Hz, Snapdragon 7s Gen 2, 12GB RAM, 256GB, Cámara 64 MP OIS, Carga 67W.",
+        "imagePath": "/uploads/1785849242742-299148614.jpg",
+        "images": [
+          "/uploads/1785849242742-299148614.jpg"
+        ],
+        "__v": 0,
+        "imagesData": [
+          {
+            "path": "/uploads/1785849242742-299148614.jpg",
+            "base64": "/uploads/1785849242742-299148614.jpg"
+          }
+        ]
+      },
+      {
+        "_id": "6a71e65086a91a0a283bc4b7",
+        "id": 7,
+        "name": "Xiaomi POCO X6 Pro 5G",
+        "category": "celulares",
+        "price": 2400,
+        "stock": 3,
+        "specs": "AMOLED 1.5K 120Hz, Dimensity 8300-Ultra, 12GB RAM, 512GB (UFS 4.0), Carga 67W (Calidad Gamer).",
+        "imagePath": "/uploads/1785849424153-438874666.jpg",
+        "images": [
+          "/uploads/1785849424153-438874666.jpg"
+        ],
+        "__v": 0,
+        "imagesData": [
+          {
+            "path": "/uploads/1785849424153-438874666.jpg",
+            "base64": "/uploads/1785849424153-438874666.jpg"
+          }
+        ]
+      },
+      {
+        "_id": "6a71e6d686a91a0a283bc4b8",
+        "id": 8,
+        "name": "Xiaomi POCO F6 5G",
+        "category": "celulares",
+        "price": 3000,
+        "stock": 3,
+        "specs": "AMOLED 1.5K 120Hz, Snapdragon 8s Gen 3, 8GB/12GB RAM, 256GB/512GB, Carga 90W.",
+        "imagePath": "/uploads/1785849558464-723915997.jpg",
+        "images": [
+          "/uploads/1785849558464-723915997.jpg"
+        ],
+        "__v": 0,
+        "imagesData": [
+          {
+            "path": "/uploads/1785849558464-723915997.jpg",
+            "base64": "/uploads/1785849558464-723915997.jpg"
+          }
+        ]
+      },
+      {
+        "_id": "6a71e78686a91a0a283bc4b9",
+        "id": 9,
+        "name": "Xiaomi Redmi 13 4G",
+        "category": "celulares",
+        "price": 1200,
+        "stock": 3,
+        "specs": "LCD 6.79\" 90Hz, MediaTek Helio G91-Ultra, 8GB RAM, 128GB/256GB, Cámara 108 MP, Carga 33W.",
+        "imagePath": "/uploads/1785849734126-224835746.jpg",
+        "images": [
+          "/uploads/1785849734126-224835746.jpg"
+        ],
+        "__v": 0,
+        "imagesData": [
+          {
+            "path": "/uploads/1785849734126-224835746.jpg",
+            "base64": "/uploads/1785849734126-224835746.jpg"
+          }
+        ]
+      },
+      {
+        "_id": "6a71e84286a91a0a283bc4ba",
+        "id": 10,
+        "name": "Xiaomi POCO M6 5G",
+        "category": "celulares",
+        "price": 1250,
+        "stock": 4,
+        "specs": ": LCD 6.74\" 90Hz, MediaTek Dimensity 6100+, 6GB/8GB RAM, 128GB/256GB, Batería 5000 mAh (18W).",
+        "imagePath": "/uploads/1785849922984-238724558.jpg",
+        "images": [
+          "/uploads/1785849922984-238724558.jpg"
+        ],
+        "__v": 0,
+        "imagesData": [
+          {
+            "path": "/uploads/1785849922984-238724558.jpg",
+            "base64": "/uploads/1785849922984-238724558.jpg"
+          }
+        ]
+      },
+      {
+        "_id": "6a71e8f586a91a0a283bc4bb",
+        "id": 11,
+        "name": "Samsung Galaxy A15 4G / 5G",
+        "category": "celulares",
+        "price": 1300,
+        "stock": 3,
+        "specs": "Super AMOLED 6.5\" 90Hz, Helio G99 / Dimensity 6100+, 6GB/8GB RAM, 128GB/256GB, Cámara 50 MP, Carga 25W.",
+        "imagePath": "/uploads/1785850101728-410041025.jpg",
+        "images": [
+          "/uploads/1785850101728-410041025.jpg"
+        ],
+        "__v": 0,
+        "imagesData": [
+          {
+            "path": "/uploads/1785850101728-410041025.jpg",
+            "base64": "/uploads/1785850101728-410041025.jpg"
+          }
+        ]
+      },
+      {
+        "_id": "6a71e9af86a91a0a283bc4bc",
+        "id": 12,
+        "name": "Samsung Galaxy A25 5G",
+        "category": "celulares",
+        "price": 1650,
+        "stock": 2,
+        "specs": "AMOLED 6.5\" 120Hz, Exynos 1280, Altavoces Estéreo Dolby Atmos, 6GB/8GB RAM, 128GB/256GB, OIS.",
+        "imagePath": "/uploads/1785850287146-371650105.png",
+        "images": [
+          "/uploads/1785850287146-371650105.png"
+        ],
+        "__v": 0,
+        "imagesData": [
+          {
+            "path": "/uploads/1785850287146-371650105.png",
+            "base64": "/uploads/1785850287146-371650105.png"
+          }
+        ]
+      }
+    ],
+    "ordenes": [
+      {
+        "_id": "6a3458b7caea2d8ec79b924a",
+        "code": "DRAKO-101",
+        "client": "Juan Pérez",
+        "brandModel": "Apple iPhone 14 Pro",
+        "issues": "Pantalla rota / Daño LCD",
+        "accessories": "Funda de silicona, Cargador",
+        "status": "listo",
+        "createdAt": "2026-06-14T10:30:00.000Z",
+        "__v": 0
+      },
+      {
+        "_id": "6a3458b7caea2d8ec79b924c",
+        "code": "DRAKO-303",
+        "client": "Carlos Ruíz",
+        "brandModel": "Xiaomi 13T Pro",
+        "issues": "Cambio de Batería",
+        "accessories": "Caja original",
+        "status": "listo",
+        "createdAt": "2026-06-10T11:30:00.000Z",
+        "__v": 0
+      },
+      {
+        "_id": "6a71f35db9ac4b0873c35a3b",
+        "code": "DRAKO-378B",
+        "client": "juan",
+        "brandModel": "2323233",
+        "issues": "pantalla rota \n[Plantilla]: Cambio de pantalla completa por rotura",
+        "accessories": "ninguno",
+        "status": "recibido",
+        "createdAt": "2026-08-04T14:12:45.330Z",
+        "__v": 0
+      },
+      {
+        "_id": "6a82604613cb3b90cc008d68",
+        "code": "DRAKO-6322",
+        "client": "Carlos Ruíz",
+        "brandModel": "Xiaomi 13T Pro",
+        "issues": "Cambio de Batería",
+        "accessories": "Caja original",
+        "status": "recibido",
+        "createdAt": "2026-08-17T01:13:42.872Z",
+        "__v": 0
+      }
+    ],
+    "reservas": [],
+    "movimientos": [
+      {
+        "cliente": {
+          "nombre": "Cliente General",
+          "docIdentidad": "9942035"
+        },
+        "_id": "6a71ef0fb9ac4b0873c35a35",
+        "tipo": "INGRESO",
+        "categoria": "RESERVA",
+        "monto": 1900,
+        "metodoPago": "TARJETA",
+        "descripcion": "Venta Presencial (FACTURA) #FAC-00002: 1x Xiaomi POCO X6 5G",
+        "referenciaId": null,
+        "comprobanteNum": "FAC-00002",
+        "usuario": "Admin / Caja",
+        "createdAt": "2026-08-04T13:54:23.786Z",
+        "updatedAt": "2026-08-04T13:56:20.578Z",
+        "__v": 0
+      },
+      {
+        "cliente": {
+          "nombre": "lk----k-l",
+          "docIdentidad": "S/N"
+        },
+        "_id": "6a825f6be8e26b0b6823350d",
+        "tipo": "INGRESO",
+        "categoria": "RESERVA",
+        "monto": 1800,
+        "metodoPago": "EFECTIVO",
+        "descripcion": "Venta Presencial (FACTURA) #FAC-00002: 1x Xiaomi Redmi Note 13 Pro 4G",
+        "referenciaId": "RES-8660",
+        "comprobanteNum": "FAC-00002",
+        "usuario": "Admin / Caja",
+        "createdAt": "2026-08-17T01:10:03.380Z",
+        "updatedAt": "2026-08-17T01:10:03.380Z",
+        "__v": 0
+      }
+    ],
+    "notificaciones": [
+      {
+        "_id": "6a7d113017744f614caafc6c",
+        "type": "vencimiento_reserva",
+        "recipientName": "pedro perez",
+        "recipientPhone": "76250944",
+        "message": "Hola *pedro perez*, su reserva *RES-8872* por el producto *Xiaomi Redmi Note 13 Pro 4G, Samsung Galaxy A15 4G / 5G* ha expirado después del límite de 48 horas. El stock ha sido liberado nuevamente al catálogo. ¡Saludos, Drakotec!",
+        "sentAt": "2026-08-13T00:34:56.538Z",
+        "status": "Enviado",
+        "__v": 0
+      },
+      {
+        "_id": "6a825590b6401737ef8454af",
+        "type": "vencimiento_reserva",
+        "recipientName": "fernando",
+        "recipientPhone": "71922712",
+        "message": "Hola *fernando*, su reserva *RES-5737* por el producto *Xiaomi POCO F6 5G* ha expirado después del límite de 48 horas. El stock ha sido liberado nuevamente al catálogo. ¡Saludos, Drakotec!",
+        "sentAt": "2026-08-17T00:28:00.933Z",
+        "status": "Enviado",
+        "__v": 0
+      }
+    ]
+  }
+}

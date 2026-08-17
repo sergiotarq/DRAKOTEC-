@@ -12,6 +12,7 @@ const Orden = require('./models/Orden');
 const Reserva = require('./models/Reserva');
 const Notificacion = require('./models/Notificacion');
 const Movimiento = require('./models/Movimiento');
+const Chat = require('./models/Chat');
 
 
 
@@ -172,7 +173,15 @@ app.post('/api/productos', (req, res, next) => {
         const maxProduct = await Producto.findOne().sort({ id: -1 });
         const nextId = maxProduct ? maxProduct.id + 1 : 1;
 
-        const imagePaths = req.files.map(file => `/uploads/${path.basename(file.path)}`);
+        // Convertir cada archivo cargado a una Data URL en Base64
+        const imagePaths = [];
+        for (const file of req.files) {
+            const fileBuffer = await fs.readFile(file.path);
+            const base64Image = `data:${file.mimetype};base64,${fileBuffer.toString('base64')}`;
+            imagePaths.push(base64Image);
+            // Eliminar archivo temporal local ya que la imagen se almacena en la BD
+            await fs.unlink(file.path).catch(() => {});
+        }
 
         const nuevoProducto = new Producto({
             id: nextId,
@@ -254,18 +263,24 @@ app.put('/api/productos/:id', (req, res, next) => {
         prod.stock = parsedStock;
         prod.specs = specs.trim();
 
-        // Si se cargaron nuevas imágenes, reemplazar las anteriores
+        // Si se cargaron nuevas imágenes, convertirlas a Base64 y reemplazar
         if (req.files && req.files.length > 0) {
-            // Borrar fotos anteriores
+            // Borrar fotos anteriores si eran rutas locales físicas
             const oldImages = prod.images && prod.images.length > 0 ? prod.images : [prod.imagePath];
             for (const imgPath of oldImages) {
-                if (imgPath && !imgPath.includes('/uploads/iphone') && !imgPath.includes('/uploads/s24')) {
+                if (imgPath && imgPath.startsWith('/uploads/') && !imgPath.includes('/uploads/iphone') && !imgPath.includes('/uploads/s24')) {
                     const oldPath = path.join(__dirname, 'public', imgPath);
                     await fs.unlink(oldPath).catch(() => {});
                 }
             }
 
-            const imagePaths = req.files.map(file => `/uploads/${path.basename(file.path)}`);
+            const imagePaths = [];
+            for (const file of req.files) {
+                const fileBuffer = await fs.readFile(file.path);
+                const base64Image = `data:${file.mimetype};base64,${fileBuffer.toString('base64')}`;
+                imagePaths.push(base64Image);
+                await fs.unlink(file.path).catch(() => {});
+            }
             prod.imagePath = imagePaths[0];
             prod.images = imagePaths;
         }
@@ -294,10 +309,10 @@ app.delete('/api/productos/:id', async (req, res) => {
             return res.status(404).json({ error: 'Producto no encontrado' });
         }
 
-        // Borrar archivos de imagen asociados
+        // Borrar archivos de imagen asociados (si eran archivos guardados en disco)
         const imagesToDelete = prod.images && prod.images.length > 0 ? prod.images : [prod.imagePath];
         for (const imgPath of imagesToDelete) {
-            if (imgPath && !imgPath.includes('/uploads/iphone') && !imgPath.includes('/uploads/s24')) {
+            if (imgPath && imgPath.startsWith('/uploads/') && !imgPath.includes('/uploads/iphone') && !imgPath.includes('/uploads/s24')) {
                 const oldPath = path.join(__dirname, 'public', imgPath);
                 await fs.unlink(oldPath).catch(() => {});
             }
@@ -782,6 +797,126 @@ app.post('/api/ventas-presenciales', async (req, res) => {
 // ==========================================
 const archiver = require('archiver');
 const unzipper = require('unzipper');
+
+// ==========================================
+// MÓDULO: CHAT EN VIVO EN TIEMPO REAL (MONGODB)
+// ==========================================
+
+// Obtener todas las conversaciones (Rol: Admin)
+app.get('/api/chats', async (req, res) => {
+    try {
+        const chats = await Chat.find({}).sort({ updatedAt: -1 });
+        const chatsObj = {};
+        chats.forEach(c => {
+            chatsObj[c.email] = c.toObject();
+        });
+        res.json(chatsObj);
+    } catch (err) {
+        console.error("Error al obtener chats:", err);
+        res.status(500).json({ error: "Error al cargar conversaciones" });
+    }
+});
+
+// Obtener una conversación específica por Email (Rol: Cliente/Admin)
+app.get('/api/chats/:email', async (req, res) => {
+    try {
+        const email = decodeURIComponent(req.params.email).toLowerCase();
+        let chat = await Chat.findOne({ email });
+        if (!chat) {
+            return res.json({ email, name: '', phone: '', messages: [], unreadAdmin: 0, unreadClient: 0, lastTime: '' });
+        }
+        res.json(chat);
+    } catch (err) {
+        res.status(500).json({ error: "Error al obtener la conversación" });
+    }
+});
+
+// Enviar un mensaje / Iniciar chat
+app.post('/api/chats/message', async (req, res) => {
+    try {
+        const { email, name, phone, sender, text } = req.body;
+        if (!email || !text) {
+            return res.status(400).json({ error: "Email y mensaje son obligatorios" });
+        }
+
+        const cleanEmail = email.toLowerCase().trim();
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
+
+        let chat = await Chat.findOne({ email: cleanEmail });
+
+        if (!chat) {
+            chat = new Chat({
+                email: cleanEmail,
+                name: name || 'Cliente',
+                phone: phone || '',
+                messages: [],
+                unreadAdmin: 0,
+                unreadClient: 0,
+                lastTime: timeStr
+            });
+        }
+
+        if (name) chat.name = name;
+        if (phone !== undefined) chat.phone = phone;
+
+        chat.messages.push({
+            sender: sender || 'client',
+            text: text.trim(),
+            time: timeStr,
+            timestamp: now
+        });
+
+        chat.lastTime = timeStr;
+        chat.updatedAt = now;
+
+        if (sender === 'admin') {
+            chat.unreadClient = (chat.unreadClient || 0) + 1;
+        } else {
+            chat.unreadAdmin = (chat.unreadAdmin || 0) + 1;
+        }
+
+        await chat.save();
+        res.status(200).json({ message: "Mensaje enviado con éxito", chat });
+    } catch (err) {
+        console.error("Error enviando mensaje de chat:", err);
+        res.status(500).json({ error: "Error al enviar mensaje" });
+    }
+});
+
+// Marcar chat como leído (por Admin o por Cliente)
+app.post('/api/chats/read', async (req, res) => {
+    try {
+        const { email, role } = req.body;
+        if (!email) return res.status(400).json({ error: "Email requerido" });
+
+        const cleanEmail = email.toLowerCase().trim();
+        let chat = await Chat.findOne({ email: cleanEmail });
+
+        if (chat) {
+            if (role === 'admin') {
+                chat.unreadAdmin = 0;
+            } else {
+                chat.unreadClient = 0;
+            }
+            await chat.save();
+        }
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Error al marcar chat como leído" });
+    }
+});
+
+// Eliminar un chat (Rol: Admin)
+app.delete('/api/chats/:email', async (req, res) => {
+    try {
+        const email = decodeURIComponent(req.params.email).toLowerCase().trim();
+        await Chat.deleteOne({ email });
+        res.json({ success: true, message: "Chat eliminado con éxito" });
+    } catch (err) {
+        res.status(500).json({ error: "Error al eliminar chat" });
+    }
+});
 
 // Configuración de multer temporal para restaurar archivos ZIP de backup
 const backupUpload = multer({ dest: path.join(__dirname, 'public/uploads/temp') });

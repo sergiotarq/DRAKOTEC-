@@ -3357,13 +3357,25 @@ const DEFAULT_LIVE_CHATS = {
     }
 };
 
-function getLiveChats() {
-    return JSON.parse(localStorage.getItem('drakotec_live_chats')) || DEFAULT_LIVE_CHATS;
+async function fetchLiveChats() {
+    try {
+        const res = await fetch(`${API_URL}/api/chats`);
+        if (!res.ok) return {};
+        return await res.json();
+    } catch (e) {
+        console.error("Error fetching chats:", e);
+        return {};
+    }
 }
 
-function saveLiveChats(chats) {
-    localStorage.setItem('drakotec_live_chats', JSON.stringify(chats));
-    updateAdminUnreadBadge();
+async function fetchCustomerChat(email) {
+    try {
+        const res = await fetch(`${API_URL}/api/chats/${encodeURIComponent(email)}`);
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (e) {
+        return null;
+    }
 }
 
 function getCustomerSession() {
@@ -3379,7 +3391,7 @@ function initContactForms() {
     renderCustomerChatModule();
 }
 
-function renderCustomerChatModule() {
+async function renderCustomerChatModule() {
     const container = document.getElementById('customerChatContainer');
     if (!container) return;
 
@@ -3420,7 +3432,7 @@ function renderCustomerChatModule() {
 
         const regForm = document.getElementById('customerRegisterForm');
         if (regForm) {
-            regForm.addEventListener('submit', (e) => {
+            regForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const name = document.getElementById('chatRegName').value.trim();
                 const email = document.getElementById('chatRegEmail').value.trim().toLowerCase();
@@ -3432,32 +3444,15 @@ function renderCustomerChatModule() {
                 const newSession = { name, email, phone };
                 saveCustomerSession(newSession);
 
-                const chats = getLiveChats();
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-
-                if (!chats[email]) {
-                    chats[email] = {
-                        id: email,
-                        clientName: name,
-                        clientEmail: email,
-                        clientPhone: phone,
-                        unreadAdmin: 1,
-                        unreadClient: 0,
-                        lastTime: timeStr,
-                        messages: []
-                    };
+                try {
+                    await fetch(`${API_URL}/api/chats/message`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, name, phone, sender: 'client', text: msgText })
+                    });
+                } catch (err) {
+                    console.error("Error al enviar mensaje inicial:", err);
                 }
-
-                chats[email].messages.push({
-                    sender: "client",
-                    text: msgText,
-                    time: timeStr
-                });
-                chats[email].unreadAdmin += 1;
-                chats[email].lastTime = timeStr;
-
-                saveLiveChats(chats);
 
                 if (typeof broadcastChannel !== 'undefined') {
                     broadcastChannel.postMessage({ type: 'live_chat_updated' });
@@ -3469,23 +3464,18 @@ function renderCustomerChatModule() {
         }
 
     } else {
-        // Ventana de Chat Activo del Cliente
-        const chats = getLiveChats();
-        const customerChat = chats[session.email] || { messages: [] };
+        // Ventana de Chat Activo del Cliente desde MongoDB
+        const customerChat = await fetchCustomerChat(session.email) || { messages: [] };
 
         if (pendingQuote) {
             sessionStorage.removeItem('drakotec_pending_quote_msg');
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-            customerChat.messages.push({
-                sender: "client",
-                text: pendingQuote,
-                time: timeStr
-            });
-            customerChat.unreadAdmin = (customerChat.unreadAdmin || 0) + 1;
-            customerChat.lastTime = timeStr;
-            chats[session.email] = customerChat;
-            saveLiveChats(chats);
+            try {
+                await fetch(`${API_URL}/api/chats/message`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: session.email, name: session.name, phone: session.phone, sender: 'client', text: pendingQuote })
+                });
+            } catch (err) {}
             if (typeof broadcastChannel !== 'undefined') {
                 broadcastChannel.postMessage({ type: 'live_chat_updated' });
             }
@@ -3493,13 +3483,17 @@ function renderCustomerChatModule() {
 
         // Marcar mensajes como leídos por el cliente
         if (customerChat.unreadClient > 0) {
-            customerChat.unreadClient = 0;
-            chats[session.email] = customerChat;
-            saveLiveChats(chats);
+            try {
+                await fetch(`${API_URL}/api/chats/read`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: session.email, role: 'client' })
+                });
+            } catch (e) {}
         }
 
         let messagesHtml = '';
-        if (customerChat.messages.length === 0) {
+        if (!customerChat.messages || customerChat.messages.length === 0) {
             messagesHtml = `<p style="text-align: center; color: var(--text-muted); margin: auto;">No hay mensajes aún. Escribe tu primera duda abajo.</p>`;
         } else {
             customerChat.messages.forEach(m => {
@@ -3548,44 +3542,34 @@ function renderCustomerChatModule() {
 
         const sendForm = document.getElementById('customerSendMsgForm');
         if (sendForm) {
-            sendForm.addEventListener('submit', (e) => {
+            sendForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const input = document.getElementById('customerMsgInput');
                 const text = input ? input.value.trim() : '';
                 if (!text) return;
 
-                const chats = getLiveChats();
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                input.value = '';
 
-                if (!chats[session.email]) {
-                    chats[session.email] = {
-                        id: session.email,
-                        clientName: session.name,
-                        clientEmail: session.email,
-                        clientPhone: session.phone || '',
-                        unreadAdmin: 0,
-                        unreadClient: 0,
-                        lastTime: timeStr,
-                        messages: []
-                    };
+                try {
+                    await fetch(`${API_URL}/api/chats/message`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: session.email,
+                            name: session.name,
+                            phone: session.phone,
+                            sender: 'client',
+                            text: text
+                        })
+                    });
+                } catch (err) {
+                    console.error("Error al enviar mensaje:", err);
                 }
-
-                chats[session.email].messages.push({
-                    sender: "client",
-                    text: text,
-                    time: timeStr
-                });
-                chats[session.email].unreadAdmin = (chats[session.email].unreadAdmin || 0) + 1;
-                chats[session.email].lastTime = timeStr;
-
-                saveLiveChats(chats);
 
                 if (typeof broadcastChannel !== 'undefined') {
                     broadcastChannel.postMessage({ type: 'live_chat_updated' });
                 }
 
-                input.value = '';
                 renderCustomerChatModule();
             });
         }
@@ -3595,12 +3579,12 @@ function renderCustomerChatModule() {
 // --- INTERFAZ DEL ADMINISTRADOR (ADMIN.HTML - SALA MULTICHAT) ---
 let activeAdminChatId = null;
 
-function renderAdminChatModule() {
+async function renderAdminChatModule() {
     const listContainer = document.getElementById('adminChatListContainer');
     const windowBox = document.getElementById('adminChatWindow');
     if (!listContainer || !windowBox) return;
 
-    const chats = getLiveChats();
+    const chats = await fetchLiveChats();
     const chatKeys = Object.keys(chats);
 
     // 1. Renderizar Lista Izquierda de Clientes
@@ -3631,7 +3615,7 @@ function renderAdminChatModule() {
 
             card.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                    <strong style="font-size: 0.85rem; color: ${isSelected ? '#c084fc' : 'var(--text-color)'};">${chat.clientName}</strong>
+                    <strong style="font-size: 0.85rem; color: ${isSelected ? '#c084fc' : 'var(--text-color)'};">${chat.name || chat.clientName || chat.email}</strong>
                     <span style="font-size: 0.7rem; color: var(--text-muted);">${chat.lastTime || ''}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -3640,10 +3624,15 @@ function renderAdminChatModule() {
                 </div>
             `;
 
-            card.addEventListener('click', () => {
+            card.addEventListener('click', async () => {
                 activeAdminChatId = key;
-                chats[key].unreadAdmin = 0;
-                saveLiveChats(chats);
+                try {
+                    await fetch(`${API_URL}/api/chats/read`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: key, role: 'admin' })
+                    });
+                } catch (e) {}
                 renderAdminChatModule();
             });
 
@@ -3663,7 +3652,8 @@ function renderAdminChatModule() {
     }
 
     const currentChat = chats[activeAdminChatId];
-    const cleanPhone = (currentChat.clientPhone || '').replace(/\D/g, '');
+    const clientName = currentChat.name || currentChat.clientName || 'Cliente';
+    const cleanPhone = (currentChat.phone || currentChat.clientPhone || '').replace(/\D/g, '');
     const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}` : null;
 
     let threadHtml = '';
@@ -3676,7 +3666,7 @@ function renderAdminChatModule() {
                 <div style="display: flex; flex-direction: column; align-items: ${isAdmin ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
                     <div style="background: ${isAdmin ? 'linear-gradient(135deg, #7c3aed, #a855f7)' : 'rgba(255,255,255,0.08)'}; color: white; padding: 8px 14px; border-radius: ${isAdmin ? '14px 14px 2px 14px' : '14px 14px 14px 2px'}; max-width: 80%; font-size: 0.88rem; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
                         <span style="font-size:0.75rem; font-weight:700; display:block; color:${isAdmin ? '#e9d5ff' : '#60a5fa'}; margin-bottom:2px;">
-                            ${isAdmin ? 'Soporte (Tú)' : currentChat.clientName}
+                            ${isAdmin ? 'Soporte (Tú)' : clientName}
                         </span>
                         ${m.text}
                     </div>
@@ -3689,8 +3679,8 @@ function renderAdminChatModule() {
     windowBox.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; margin-bottom: 10px;">
             <div>
-                <strong style="font-size: 0.95rem; color: var(--primary-color);">👤 ${currentChat.clientName}</strong>
-                <span style="font-size: 0.78rem; color: var(--text-muted); margin-left: 8px;">(${currentChat.clientEmail})</span>
+                <strong style="font-size: 0.95rem; color: var(--primary-color);">👤 ${clientName}</strong>
+                <span style="font-size: 0.78rem; color: var(--text-muted); margin-left: 8px;">(${currentChat.email})</span>
             </div>
             <div style="display: flex; gap: 6px; align-items: center;">
                 ${waUrl ? `<a href="${waUrl}" target="_blank" class="btn btn-secondary" style="font-size: 0.75rem; padding: 3px 8px; color: #34d399; border-color: #34d399; text-decoration: none;">📱 WhatsApp Web</a>` : ''}
@@ -3703,55 +3693,54 @@ function renderAdminChatModule() {
         </div>
 
         <form id="adminSendReplyForm" style="display: flex; gap: 8px;">
-            <input type="text" id="adminReplyInput" class="form-input" required placeholder="Escribe tu respuesta para ${currentChat.clientName}..." style="flex: 1; font-size: 0.88rem;">
+            <input type="text" id="adminReplyInput" class="form-input" required placeholder="Escribe tu respuesta para ${clientName}..." style="flex: 1; font-size: 0.88rem;">
             <button type="submit" class="btn btn-primary" style="padding: 8px 18px; font-weight: bold; background: linear-gradient(135deg, #7c3aed, #6366f1);">Enviar Respuesta</button>
         </form>
     `;
 
-    updateAdminUnreadBadge();
+    updateAdminUnreadBadge(chats);
 
     const scrollBox = document.getElementById('adminChatThreadScroll');
     if (scrollBox) scrollBox.scrollTop = scrollBox.scrollHeight;
 
     const replyForm = document.getElementById('adminSendReplyForm');
     if (replyForm) {
-        replyForm.addEventListener('submit', (e) => {
+        replyForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const input = document.getElementById('adminReplyInput');
             const text = input ? input.value.trim() : '';
             if (!text) return;
 
-            const chats = getLiveChats();
-            if (chats[activeAdminChatId]) {
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            input.value = '';
 
-                chats[activeAdminChatId].messages.push({
-                    sender: "admin",
-                    text: text,
-                    time: timeStr
+            try {
+                await fetch(`${API_URL}/api/chats/message`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: activeAdminChatId,
+                        sender: 'admin',
+                        text: text
+                    })
                 });
-                chats[activeAdminChatId].unreadClient = (chats[activeAdminChatId].unreadClient || 0) + 1;
-                chats[activeAdminChatId].lastTime = timeStr;
-
-                saveLiveChats(chats);
-
-                if (typeof broadcastChannel !== 'undefined') {
-                    broadcastChannel.postMessage({ type: 'live_chat_updated' });
-                }
-
-                input.value = '';
-                renderAdminChatModule();
+            } catch (err) {
+                console.error("Error al responder mensaje:", err);
             }
+
+            if (typeof broadcastChannel !== 'undefined') {
+                broadcastChannel.postMessage({ type: 'live_chat_updated' });
+            }
+
+            renderAdminChatModule();
         });
     }
 }
 
-function updateAdminUnreadBadge() {
+async function updateAdminUnreadBadge(providedChats = null) {
     const badge = document.getElementById('unreadContactBadge');
     if (!badge) return;
 
-    const chats = getLiveChats();
+    const chats = providedChats || await fetchLiveChats();
     const totalUnread = Object.values(chats).reduce((acc, chat) => acc + (chat.unreadAdmin || 0), 0);
 
     if (totalUnread > 0) {
@@ -3762,28 +3751,27 @@ function updateAdminUnreadBadge() {
     }
 }
 
-function deleteLiveChat(chatId) {
-    const chats = getLiveChats();
-    const targetChat = chats[chatId];
-    const clientName = targetChat ? targetChat.clientName : chatId;
+async function deleteLiveChat(chatId) {
+    if (confirm(`¿Estás seguro de eliminar todo el historial de chat del correo ${chatId}?`)) {
+        try {
+            await fetch(`${API_URL}/api/chats/${encodeURIComponent(chatId)}`, {
+                method: 'DELETE'
+            });
+        } catch (err) {
+            console.error("Error al eliminar chat:", err);
+        }
 
-    if (confirm(`¿Estás seguro de eliminar todo el historial de chat de ${clientName}?`)) {
-        delete chats[chatId];
-        saveLiveChats(chats);
-
-        const remainingKeys = Object.keys(chats);
-        activeAdminChatId = remainingKeys.length > 0 ? remainingKeys[0] : null;
+        activeAdminChatId = null;
 
         if (typeof broadcastChannel !== 'undefined') {
             broadcastChannel.postMessage({ type: 'live_chat_updated' });
         }
 
         if (typeof showToast === 'function') {
-            showToast(`Chat de ${clientName} eliminado con éxito.`);
+            showToast(`Chat eliminado con éxito.`);
         }
 
         renderAdminChatModule();
-        updateAdminUnreadBadge();
     }
 }
 
