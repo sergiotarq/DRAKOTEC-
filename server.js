@@ -557,6 +557,26 @@ app.post('/api/reservas/:code/completar', async (req, res) => {
     }
 });
 
+// Eliminar reserva (Solo si está completada o liberada)
+app.delete('/api/reservas/:code', async (req, res) => {
+    try {
+        const { code } = req.params;
+        const resv = await Reserva.findOne({ code });
+        if (!resv) {
+            return res.status(404).json({ error: 'Reserva no encontrada' });
+        }
+        if (resv.status === 'activa') {
+            return res.status(400).json({ error: 'No se puede eliminar una reserva ACTIVA. Debes completarla o liberarla primero.' });
+        }
+
+        await Reserva.deleteOne({ code });
+        res.json({ message: 'Reserva eliminada con éxito del sistema' });
+    } catch (err) {
+        console.error("Error al eliminar reserva:", err);
+        res.status(500).json({ error: 'Error interno al eliminar la reserva' });
+    }
+});
+
 // Obtener notificaciones de WhatsApp (historial)
 app.get('/api/notificaciones', async (req, res) => {
     try {
@@ -751,6 +771,180 @@ app.post('/api/ventas-presenciales', async (req, res) => {
     } catch (err) {
         console.error("Error al procesar venta presencial:", err);
         res.status(500).json({ error: 'Error interno al procesar la venta presencial.' });
+    }
+});
+
+// ==========================================
+// ENDPOINTS API: COPIAS DE SEGURIDAD (BACKUP & RESTORE CON IMÁGENES EN ZIP)
+// ==========================================
+const archiver = require('archiver');
+const unzipper = require('unzipper');
+
+// Configuración de multer temporal para restaurar archivos ZIP de backup
+const backupUpload = multer({ dest: path.join(__dirname, 'public/uploads/temp') });
+
+// Endpoint auxiliar: Obtener JSON de vista previa del backup
+app.get('/api/backup/preview', async (req, res) => {
+    try {
+        const productos = await Producto.find({});
+        const ordenes = await Orden.find({});
+        const reservas = await Reserva.find({});
+        const movimientos = await Movimiento.find({});
+        const notificaciones = await Notificacion.find({});
+
+        res.json({
+            version: '1.0',
+            exportedAt: new Date().toISOString(),
+            system: 'Drakotec Store',
+            summary: {
+                totalProductos: productos.length,
+                totalOrdenes: ordenes.length,
+                totalReservas: reservas.length,
+                totalMovimientos: movimientos.length,
+                totalNotificaciones: notificaciones.length
+            },
+            data: {
+                productos,
+                ordenes,
+                reservas,
+                movimientos,
+                notificaciones
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Error al generar la vista previa del backup.' });
+    }
+});
+
+// 1. Exportar Backup Completo en ZIP (Datos JSON + Carpeta Uploads con Imágenes)
+app.get('/api/backup', async (req, res) => {
+    try {
+        const productos = await Producto.find({});
+        const ordenes = await Orden.find({});
+        const reservas = await Reserva.find({});
+        const movimientos = await Movimiento.find({});
+        const notificaciones = await Notificacion.find({});
+
+        const backupData = {
+            version: '1.0',
+            exportedAt: new Date().toISOString(),
+            system: 'Drakotec Store',
+            summary: {
+                totalProductos: productos.length,
+                totalOrdenes: ordenes.length,
+                totalReservas: reservas.length,
+                totalMovimientos: movimientos.length,
+                totalNotificaciones: notificaciones.length
+            },
+            data: {
+                productos,
+                ordenes,
+                reservas,
+                movimientos,
+                notificaciones
+            }
+        };
+
+        const filename = `drakotec_full_backup_${Date.now()}.zip`;
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+
+        const archive = archiver('zip', { zlib: { level: 9 } });
+
+        archive.on('error', (err) => {
+            console.error("Error comprimiendo backup:", err);
+            res.status(500).send({ error: 'Error al empaquetar copia de seguridad.' });
+        });
+
+        archive.pipe(res);
+
+        // Añadir archivo JSON de datos
+        archive.append(JSON.stringify(backupData, null, 2), { name: 'backup.json' });
+
+        // Añadir carpeta de imágenes de subidas
+        const uploadsPath = path.join(__dirname, 'public/uploads');
+        archive.directory(uploadsPath, 'uploads');
+
+        await archive.finalize();
+    } catch (err) {
+        console.error("Error al exportar backup ZIP:", err);
+        res.status(500).json({ error: 'Error al generar la copia de seguridad de la base de datos.' });
+    }
+});
+
+// 2. Restaurar Backup Completo (Acepta paquete ZIP o archivo JSON)
+app.post('/api/backup/restore', backupUpload.single('backupFile'), async (req, res) => {
+    try {
+        let backupObj = null;
+
+        if (req.file) {
+            const filePath = req.file.path;
+            
+            // Si subieron un archivo ZIP
+            if (req.file.originalname.endsWith('.zip') || req.file.mimetype.includes('zip')) {
+                const directory = await unzipper.Open.file(filePath);
+                
+                // Extraer imágenes a public/uploads
+                for (const file of directory.files) {
+                    if (file.path.startsWith('uploads/')) {
+                        const targetName = file.path.replace('uploads/', '');
+                        if (targetName) {
+                            const destPath = path.join(__dirname, 'public/uploads', targetName);
+                            const content = await file.buffer();
+                            await fs.writeFile(destPath, content);
+                        }
+                    } else if (file.path === 'backup.json') {
+                        const content = await file.buffer();
+                        backupObj = JSON.parse(content.toString('utf-8'));
+                    }
+                }
+
+                await fs.unlink(filePath).catch(() => {});
+            } else {
+                // Si subieron un archivo JSON directamente
+                const fileContent = await fs.readFile(filePath, 'utf-8');
+                backupObj = JSON.parse(fileContent);
+                await fs.unlink(filePath).catch(() => {});
+            }
+        } else if (req.body.backup) {
+            backupObj = req.body.backup;
+        }
+
+        if (!backupObj || !backupObj.data) {
+            return res.status(400).json({ error: 'Formato de archivo de backup no válido o incompleto.' });
+        }
+
+        const { productos, ordenes, reservas, movimientos, notificaciones } = backupObj.data;
+
+        if (Array.isArray(productos) && productos.length > 0) {
+            await Producto.deleteMany({});
+            await Producto.insertMany(productos);
+        }
+
+        if (Array.isArray(ordenes) && ordenes.length > 0) {
+            await Orden.deleteMany({});
+            await Orden.insertMany(ordenes);
+        }
+
+        if (Array.isArray(reservas) && reservas.length > 0) {
+            await Reserva.deleteMany({});
+            await Reserva.insertMany(reservas);
+        }
+
+        if (Array.isArray(movimientos) && movimientos.length > 0) {
+            await Movimiento.deleteMany({});
+            await Movimiento.insertMany(movimientos);
+        }
+
+        if (Array.isArray(notificaciones) && notificaciones.length > 0) {
+            await Notificacion.deleteMany({});
+            await Notificacion.insertMany(notificaciones);
+        }
+
+        res.json({ message: 'Base de datos e imágenes restauradas con éxito.' });
+    } catch (err) {
+        console.error("Error al restaurar backup:", err);
+        res.status(500).json({ error: 'Error al restaurar el paquete de datos e imágenes.' });
     }
 });
 

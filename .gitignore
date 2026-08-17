@@ -7,6 +7,8 @@ db.json
 # Archivos subidos por usuarios
 public/uploads/*
 !public/uploads/.gitkeep
+!public/uploads/temp/
+!public/uploads/temp/.gitkeep
 
 # Archivos del sistema y editor
 .env

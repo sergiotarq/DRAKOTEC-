@@ -97,6 +97,9 @@
                     📌 Contactos,Reservas y WhatsApp
                     <span id="unreadContactBadge" style="display: none; background: #ef4444; color: white; border-radius: 999px; padding: 2px 7px; font-size: 0.72rem; font-weight: bold; box-shadow: 0 0 10px rgba(239, 68, 68, 0.8);">0</span>
                 </button>
+                <button class="module-tab" data-target="mod-backup" id="tabBackup">
+                    💾 Copias de Seguridad (Backup)
+                </button>
                 <button class="module-tab" data-target="mod-configuracion" id="tabConfiguracion">
                     ⚙️ Configuración del Sistema
                 </button>
@@ -420,6 +423,103 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ==========================================
+               MÓDULO F: COPIAS DE SEGURIDAD (BACKUP & RESTORE)
+               ========================================== -->
+            <div id="mod-backup" class="module-content" style="display: none;">
+                <div class="glass-card contact-form">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3>💾 Copias de Seguridad (Backup) y Restauración</h3>
+                        <span class="status-badge listo">Base de Datos MongoDB</span>
+                    </div>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 20px;">
+                        Genera respaldos completos de la base de datos (Productos, Órdenes Técnicas, Reservas, Movimientos y Chats) <strong>incluyendo todas las fotografías de productos en un paquete comprimido ZIP</strong>.
+                    </p>
+
+                    <!-- Acciones principales -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 28px;">
+                        <!-- Generar Backup -->
+                        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 20px; border-radius: 14px; display: flex; flex-direction: column; justify-content: space-between;">
+                            <div>
+                                <h4 style="color: #34d399; margin-bottom: 8px;">📥 Generar Copia Completa (ZIP)</h4>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">Descarga instantáneamente un paquete empaquetado `.zip` con todos los datos y la carpeta completa de imágenes de productos.</p>
+                            </div>
+                            <button type="button" class="btn btn-primary" id="btnDownloadBackup" style="background: linear-gradient(135deg, #10b981, #059669); font-weight: bold; width: 100%;">
+                                📦 Descargar Backup Completo (.ZIP)
+                            </button>
+                        </div>
+
+                        <!-- Restaurar Backup -->
+                        <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); padding: 20px; border-radius: 14px; display: flex; flex-direction: column; justify-content: space-between;">
+                            <div>
+                                <h4 style="color: #fbbf24; margin-bottom: 8px;">📤 Restaurar Base de Datos + Fotos</h4>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">Sube el paquete de backup previo (.ZIP o .JSON) para restaurar datos e imágenes automáticamente.</p>
+                                <input type="file" id="backupFileInput" class="form-input-file" accept=".zip,.json" style="font-size: 0.8rem; margin-bottom: 12px;">
+                            </div>
+                            <button type="button" class="btn btn-secondary" id="btnRestoreBackup" style="border-color: #f59e0b; color: #f59e0b; font-weight: bold; width: 100%;">
+                                📤 Cargar y Restaurar Backup
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Visor de Contenido del Backup (Visual Dashboard) -->
+                    <div style="border-top: 1px solid var(--border-glass); padding-top: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                            <h4 style="margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                👁️ Inspección Visual del Respaldo
+                            </h4>
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button" class="btn btn-secondary" id="btnLoadLiveBackupViewer" style="padding: 6px 14px; font-size: 0.8rem;">
+                                    🔍 Inspeccionar Estado Actual
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="btnToggleRawJson" style="padding: 6px 12px; font-size: 0.8rem; border-color: rgba(255,255,255,0.2);">
+                                    💻 Modo Código JSON
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Tarjetas de Estadísticas KPI de la Copia -->
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px;" id="backupKpiContainer">
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); padding: 12px; border-radius: 12px; text-align: center;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Productos</span>
+                                <h3 style="color: #60a5fa; margin-top: 2px;" id="kpiProducts">0</h3>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); padding: 12px; border-radius: 12px; text-align: center;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Órdenes</span>
+                                <h3 style="color: #34d399; margin-top: 2px;" id="kpiOrders">0</h3>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); padding: 12px; border-radius: 12px; text-align: center;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Reservas</span>
+                                <h3 style="color: #f59e0b; margin-top: 2px;" id="kpiReservations">0</h3>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); padding: 12px; border-radius: 12px; text-align: center;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Movimientos</span>
+                                <h3 style="color: #c084fc; margin-top: 2px;" id="kpiMovements">0</h3>
+                            </div>
+                        </div>
+
+                        <!-- Pestañas de Inspección por Colección -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; overflow-x: auto;" id="backupSubTabsNav">
+                            <button class="btn btn-secondary backup-subtab active" data-coll="productos" style="padding: 4px 12px; font-size: 0.8rem; background: rgba(255,255,255,0.1);">📦 Productos</button>
+                            <button class="btn btn-secondary backup-subtab" data-coll="ordenes" style="padding: 4px 12px; font-size: 0.8rem;">🛠️ Órdenes Técnicas</button>
+                            <button class="btn btn-secondary backup-subtab" data-coll="reservas" style="padding: 4px 12px; font-size: 0.8rem;">📌 Reservas</button>
+                            <button class="btn btn-secondary backup-subtab" data-coll="movimientos" style="padding: 4px 12px; font-size: 0.8rem;">💰 Movimientos Caja</button>
+                        </div>
+                        
+                        <!-- Panel de Vista Previa Gráfica -->
+                        <div id="backupVisualViewer" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass); border-radius: 12px; padding: 16px; min-height: 200px; max-height: 380px; overflow-y: auto;">
+                            <p style="text-align: center; color: var(--text-muted); margin-top: 60px;">Presiona <strong>"🔍 Inspeccionar Estado Actual"</strong> o selecciona un archivo de copia para ver las tarjetas interactivas de tus datos.</p>
+                        </div>
+
+                        <!-- Modo Código JSON (Oculto por defecto) -->
+                        <div style="display: none; background: #0d1117; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 16px; font-family: monospace; font-size: 0.85rem; max-height: 380px; overflow: auto; color: #7ee787; margin-top: 10px;" id="backupJsonViewer">
+                            // Modo Código JSON
+                        </div>
+                    </div>
+                </div>
+            </div>
+
 
             <!-- ==========================================
                MÓDULO F: CONFIGURACIÓN DEL SISTEMA

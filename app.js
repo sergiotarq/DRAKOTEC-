@@ -692,16 +692,15 @@ function initCartPage() {
 
                 showToast(`¡Reserva ${resCode} confirmada! Válida por 48 horas.`, "success");
 
-                // Mostrar alerta informativa con los detalles y la cláusula de 48 horas
-                alert(
-                    `📌 ¡RESERVA CONFIRMADA CON ÉXITO!\n\n` +
-                    `Código de Reserva: ${resCode}\n` +
-                    `Cliente: ${clientName}\n` +
-                    `Teléfono: ${clientPhone}\n\n` +
-                    `⏳ AVISO IMPORTANTE:\n` +
-                    `La reserva será válida por solo 48 horas (hasta el ${expires.toLocaleString('es-ES')}).\n` +
-                    `Después de ese tiempo tu reserva se disuelve automáticamente y el stock del producto se actualiza nuevamente.`
-                );
+                // Generar y desplegar el Ticket Virtual de Reserva
+                showVirtualTicket({
+                    code: resCode,
+                    clientName,
+                    clientPhone,
+                    items: reservationData.items,
+                    createdAt: now,
+                    expiresAt: expires
+                });
 
             } catch (err) {
                 console.error("Error al procesar reserva:", err);
@@ -711,6 +710,95 @@ function initCartPage() {
                 checkoutBtn.innerHTML = "📌 Confirmar Reserva (Válida 48h)";
             }
         });
+    }
+}
+
+function showVirtualTicket(resData) {
+    const modal = document.getElementById('ticketModal');
+    if (!modal) return;
+
+    document.getElementById('ticketCode').textContent = resData.code;
+    document.getElementById('ticketClient').textContent = resData.clientName;
+    document.getElementById('ticketPhone').textContent = resData.clientPhone;
+    document.getElementById('ticketDate').textContent = new Date(resData.createdAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+    document.getElementById('ticketExpires').textContent = new Date(resData.expiresAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+
+    const itemsContainer = document.getElementById('ticketItemsList');
+    itemsContainer.innerHTML = '';
+
+    let total = 0;
+    resData.items.forEach(item => {
+        const itemTotal = item.product.price * item.quantity;
+        total += itemTotal;
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.fontSize = '0.85rem';
+        row.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+        row.style.paddingBottom = '4px';
+
+        row.innerHTML = `
+            <span>${item.product.name} <strong>(x${item.quantity})</strong></span>
+            <span style="font-weight:700;">${itemTotal.toLocaleString('es-BO')} Bs.</span>
+        `;
+        itemsContainer.appendChild(row);
+    });
+
+    document.getElementById('ticketTotal').textContent = `${total.toLocaleString('es-BO')} Bs.`;
+
+    modal.style.display = 'flex';
+
+    // Lógica del Temporizador de Cuenta Regresiva (48h)
+    const countdownElem = document.getElementById('ticketCountdownTimer');
+    if (window.ticketTimerInterval) clearInterval(window.ticketTimerInterval);
+
+    const expiresTime = new Date(resData.expiresAt).getTime();
+
+    function updateTicketCountdown() {
+        const now = new Date().getTime();
+        const distance = expiresTime - now;
+
+        if (distance <= 0) {
+            clearInterval(window.ticketTimerInterval);
+            if (countdownElem) {
+                countdownElem.textContent = "⚠️ TIEMPO AGOTADO (EXPIRED)";
+                countdownElem.style.color = "#ef4444";
+            }
+            return;
+        }
+
+        const hours = Math.floor(distance / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+        if (countdownElem) {
+            countdownElem.textContent = `${hours}h ${minutes < 10 ? '0' : ''}${minutes}m ${seconds < 10 ? '0' : ''}${seconds}s`;
+            if (hours < 6) {
+                countdownElem.style.color = "#ef4444";
+            } else {
+                countdownElem.style.color = "#f59e0b";
+            }
+        }
+    }
+
+    updateTicketCountdown();
+    window.ticketTimerInterval = setInterval(updateTicketCountdown, 1000);
+
+    // Botones de acción del Ticket
+    const printBtn = document.getElementById('printTicketBtn');
+    const closeBtn = document.getElementById('closeTicketBtn');
+
+    if (printBtn) {
+        printBtn.onclick = () => {
+            window.print();
+        };
+    }
+
+    if (closeBtn) {
+        closeBtn.onclick = () => {
+            modal.style.display = 'none';
+            if (window.ticketTimerInterval) clearInterval(window.ticketTimerInterval);
+        };
     }
 }
 
@@ -850,7 +938,7 @@ function initRepairCalculator() {
     const calcResult = document.getElementById('calcResult');
     const calcPrice = document.getElementById('calcPrice');
     const calcTime = document.getElementById('calcTime');
-    const bookRepairBtn = document.getElementById('bookRepairBtn');
+    const contactRepairBtn = document.getElementById('contactRepairBtn');
 
     if (!brandSelect) return;
 
@@ -894,15 +982,22 @@ function initRepairCalculator() {
         issueSelect.selectedIndex = 0;
     }
 
-    bookRepairBtn.addEventListener('click', () => {
-        const model = modelSelect.value;
-        const issueName = REPAIR_ISSUES[issueSelect.value].name;
-        showToast(`Cita confirmada para tu ${model} (${issueName}).`);
-        brandSelect.selectedIndex = 0;
-        modelSelect.innerHTML = `<option value="" disabled selected>Elige primero una marca</option>`;
-        modelSelect.disabled = true;
-        resetResult();
-    });
+    if (contactRepairBtn) {
+        contactRepairBtn.addEventListener('click', () => {
+            const brand = brandSelect.value;
+            const model = modelSelect.value;
+            const issueName = REPAIR_ISSUES[issueSelect.value]?.name || '';
+            const price = calcPrice.textContent;
+            
+            const message = `Hola, me gustaría consultar por la reparación de mi ${brand} ${model} (${issueName}) con precio estimado de ${price}.`;
+            sessionStorage.setItem('drakotec_pending_quote_msg', message);
+
+            showToast(`Redirigiendo al Chat de Atención en Vivo...`);
+            setTimeout(() => {
+                window.location.href = 'contacto.html';
+            }, 500);
+        });
+    }
 }
 
 async function fetchOrdenes() {
@@ -2368,6 +2463,19 @@ async function renderReservationsAdmin() {
                     const itemsText = r.items.map(i => `${i.name} (${i.quantity}x)`).join('<br>');
                     const expiresDate = new Date(r.expiresAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
                     
+                    let timeRemainingHtml = `<strong>${expiresDate}</strong>`;
+                    if (r.status === 'activa') {
+                        const now = new Date().getTime();
+                        const diff = new Date(r.expiresAt).getTime() - now;
+                        if (diff > 0) {
+                            const hours = Math.floor(diff / (1000 * 60 * 60));
+                            const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                            timeRemainingHtml += `<br><span style="font-family:monospace;font-size:0.78rem;color:#f59e0b;font-weight:700;">⏱️ ${hours}h ${mins}m restantes</span>`;
+                        } else {
+                            timeRemainingHtml += `<br><span style="font-family:monospace;font-size:0.78rem;color:#ef4444;font-weight:700;">⚠️ Tiempo Expirado</span>`;
+                        }
+                    }
+
                     let statusBadge = '';
                     if (r.status === 'activa') {
                         statusBadge = '<span class="status-badge status-progress" style="background:rgba(217, 119, 6, 0.1);color:#d97706;border-color:rgba(217, 119, 6, 0.2);">Activa</span>';
@@ -2383,6 +2491,10 @@ async function renderReservationsAdmin() {
                             <button class="btn-edit-inline complete-reservation-btn" data-code="${r.code}" style="background:rgba(16, 185, 129, 0.1);color:#10b981;border-color:rgba(16, 185, 129, 0.2);">Vendido</button>
                             <button class="btn-delete-inline release-reservation-btn" data-code="${r.code}" style="margin-left:5px;">Liberar</button>
                         `;
+                    } else if (r.status === 'completada' || r.status === 'liberada') {
+                        actionButtons = `
+                            <button class="btn-delete-inline delete-reservation-btn" data-code="${r.code}" style="background:rgba(239,68,68,0.1);color:#ef4444;border-color:rgba(239,68,68,0.2);">🗑️ Eliminar</button>
+                        `;
                     }
 
                     tr.innerHTML = `
@@ -2393,7 +2505,7 @@ async function renderReservationsAdmin() {
                         </td>
                         <td style="font-size:0.85rem;">${itemsText}</td>
                         <td style="font-size:0.8rem;">
-                            <strong>${expiresDate}</strong>
+                            ${timeRemainingHtml}
                         </td>
                         <td>${statusBadge}</td>
                         <td>${actionButtons}</td>
@@ -2427,10 +2539,16 @@ async function renderReservationsAdmin() {
                     div.style.padding = '10px';
                     div.style.fontSize = '0.85rem';
 
+                    const cleanPhone = (n.recipientPhone || '').replace(/[^0-9]/g, '');
+                    const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(n.message)}` : '#';
+                    
                     div.innerHTML = `
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                            <span style="color:#10b981;font-weight:700;display:inline-flex;align-items:center;gap:4px;">🟢 WhatsApp Automatizado</span>
-                            <span style="font-size:0.75rem;color:var(--text-muted);">${date}</span>
+                            <span style="color:#10b981;font-weight:700;display:inline-flex;align-items:center;gap:4px;">🟢 WhatsApp Notificación</span>
+                            <div>
+                                <span style="font-size:0.75rem;color:var(--text-muted);margin-right:8px;">${date}</span>
+                                ${cleanPhone ? `<a href="${waUrl}" target="_blank" class="btn btn-secondary" style="padding:2px 8px;font-size:0.75rem;background:#25D366;color:#fff;border:none;border-radius:4px;text-decoration:none;">📱 Enviar por WhatsApp</a>` : ''}
+                            </div>
                         </div>
                         <div style="margin-bottom:4px;">
                             <strong>Cliente:</strong> ${n.recipientName} (${n.recipientPhone})
@@ -2491,6 +2609,26 @@ async function renderReservationsAdmin() {
         });
     });
 
+    tbody.querySelectorAll('.delete-reservation-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const code = btn.getAttribute('data-code');
+            if (confirm(`¿Deseas eliminar permanentemente el registro de la reserva ${code}?`)) {
+                try {
+                    const res = await fetch(`${API_URL}/api/reservas/${code}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        showToast(`Reserva ${code} eliminada del registro.`);
+                        renderReservationsAdmin();
+                    } else {
+                        const errData = await res.json();
+                        showToast(errData.error || "Error al eliminar la reserva.", "danger");
+                    }
+                } catch (err) {
+                    showToast("Error de conexión al eliminar la reserva.", "danger");
+                }
+            }
+        });
+    });
+
     // 4. Renderizar SIEMPRE el módulo de Chat en Vivo Messenger Admin
     renderAdminChatModule();
 
@@ -2500,6 +2638,248 @@ async function renderReservationsAdmin() {
         showToast("Sala de Chat actualizada.");
     });
 }
+
+// ==========================================
+// MÓDULO DE COPIAS DE SEGURIDAD (BACKUP & RESTORE)
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const btnDownload = document.getElementById('btnDownloadBackup');
+    const btnRestore = document.getElementById('btnRestoreBackup');
+    const btnLoadViewer = document.getElementById('btnLoadLiveBackupViewer');
+    const backupFileInput = document.getElementById('backupFileInput');
+    const viewer = document.getElementById('backupJsonViewer');
+
+    let currentBackupObject = null;
+    let activeSubTab = 'productos';
+
+    function renderBackupVisualCards() {
+        const visualViewer = document.getElementById('backupVisualViewer');
+        const kpiProducts = document.getElementById('kpiProducts');
+        const kpiOrders = document.getElementById('kpiOrders');
+        const kpiReservations = document.getElementById('kpiReservations');
+        const kpiMovements = document.getElementById('kpiMovements');
+
+        if (!currentBackupObject || !currentBackupObject.data) {
+            if (visualViewer) {
+                visualViewer.innerHTML = `<p style="text-align: center; color: var(--text-muted); margin-top: 60px;">Presiona <strong>"🔍 Inspeccionar Estado Actual"</strong> o selecciona un archivo de copia para ver las tarjetas interactivas de tus datos.</p>`;
+            }
+            return;
+        }
+
+        const data = currentBackupObject.data;
+        const summary = currentBackupObject.summary || {};
+
+        if (kpiProducts) kpiProducts.textContent = summary.totalProductos ?? (data.productos?.length || 0);
+        if (kpiOrders) kpiOrders.textContent = summary.totalOrdenes ?? (data.ordenes?.length || 0);
+        if (kpiReservations) kpiReservations.textContent = summary.totalReservas ?? (data.reservas?.length || 0);
+        if (kpiMovements) kpiMovements.textContent = summary.totalMovimientos ?? (data.movimientos?.length || 0);
+
+        if (!visualViewer) return;
+        visualViewer.innerHTML = '';
+
+        const list = data[activeSubTab] || [];
+        if (list.length === 0) {
+            visualViewer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding:30px 0;">No hay elementos registrados en la colección <strong>${activeSubTab}</strong> de este respaldo.</p>`;
+            return;
+        }
+
+        const grid = document.createElement('div');
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(240px, 1fr))';
+        grid.style.gap = '12px';
+
+        list.forEach(item => {
+            const card = document.createElement('div');
+            card.style.background = 'rgba(255,255,255,0.04)';
+            card.style.border = '1px solid var(--border-glass)';
+            card.style.borderRadius = '10px';
+            card.style.padding = '12px';
+            card.style.fontSize = '0.85rem';
+
+            if (activeSubTab === 'productos') {
+                const img = (item.images && item.images[0]) ? item.images[0] : '';
+                card.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+                        ${img ? `<img src="${img}" style="width:40px; height:40px; object-fit:cover; border-radius:6px;">` : '📦'}
+                        <div>
+                            <strong style="display:block; color:var(--text-primary);">${item.name}</strong>
+                            <span style="font-size:0.75rem; color:var(--accent-purple); font-weight:bold;">${(item.price || 0).toLocaleString('es-BO')} Bs.</span>
+                        </div>
+                    </div>
+                    <div style="font-size:0.75rem; color:var(--text-muted);">Stock: <strong style="color:#10b981;">${item.stock} unidades</strong> | Categoría: ${item.category}</div>
+                `;
+            } else if (activeSubTab === 'ordenes') {
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                        <span style="font-family:monospace; font-weight:bold; color:#34d399;">${item.code || item.id}</span>
+                        <span style="font-size:0.72rem; color:var(--text-muted);">${item.status || 'Registrada'}</span>
+                    </div>
+                    <div><strong>Cliente:</strong> ${item.clientName || 'Cliente'}</div>
+                    <div style="font-size:0.78rem; color:var(--text-muted); margin-top:4px;">Equipo: ${item.deviceBrand || ''} ${item.deviceModel || ''} (${item.issue || 'Servicio'})</div>
+                `;
+            } else if (activeSubTab === 'reservas') {
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                        <span style="font-family:monospace; font-weight:bold; color:#f59e0b;">${item.code}</span>
+                        <span style="font-size:0.72rem; color:var(--text-muted);">${item.status}</span>
+                    </div>
+                    <div><strong>Cliente:</strong> ${item.clientName}</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Teléfono: ${item.clientPhone}</div>
+                `;
+            } else if (activeSubTab === 'movimientos') {
+                const isIngreso = item.tipo === 'INGRESO';
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                        <span style="font-weight:bold; color:${isIngreso ? '#34d399' : '#ef4444'};">${isIngreso ? '➕ INGRESO' : '➖ GASTO'}</span>
+                        <strong style="color:${isIngreso ? '#34d399' : '#ef4444'};">${(item.monto || 0).toLocaleString('es-BO')} Bs.</strong>
+                    </div>
+                    <div style="font-size:0.8rem;">${item.descripcion}</div>
+                `;
+            }
+
+            grid.appendChild(card);
+        });
+
+        visualViewer.appendChild(grid);
+    }
+
+    // Pestañas secundarias de colecciones
+    document.querySelectorAll('.backup-subtab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.backup-subtab').forEach(t => {
+                t.classList.remove('active');
+                t.style.background = 'transparent';
+            });
+            tab.classList.add('active');
+            tab.style.background = 'rgba(255,255,255,0.1)';
+            activeSubTab = tab.getAttribute('data-coll');
+            renderBackupVisualCards();
+        });
+    });
+
+    // Alternar entre Vista Gráfica e Inspección JSON directo
+    const btnToggleJson = document.getElementById('btnToggleRawJson');
+    if (btnToggleJson) {
+        btnToggleJson.addEventListener('click', () => {
+            if (viewer.style.display === 'none') {
+                viewer.style.display = 'block';
+                btnToggleJson.textContent = '👁️ Modo Tarjetas Visuales';
+            } else {
+                viewer.style.display = 'none';
+                btnToggleJson.textContent = '💻 Modo Código JSON';
+            }
+        });
+    }
+
+    // 1. Descargar Backup Completo (.ZIP)
+    if (btnDownload) {
+        btnDownload.addEventListener('click', async () => {
+            try {
+                showToast("Generando y empaquetando copia de seguridad ZIP...");
+                const res = await fetch(`${API_URL}/api/backup`);
+                if (!res.ok) throw new Error("Error al obtener el respaldo");
+
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `drakotec_full_backup_${new Date().toISOString().slice(0,10)}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showToast("¡Backup Completo ZIP generado y descargado!", "success");
+            } catch (err) {
+                console.error("Error descargando backup ZIP:", err);
+                showToast("Error al descargar la copia de seguridad.", "danger");
+            }
+        });
+    }
+
+    // 2. Cargar Vista Previa Actual en Visor Visual
+    if (btnLoadViewer) {
+        btnLoadViewer.addEventListener('click', async () => {
+            try {
+                showToast("Inspeccionando estado actual del sistema...");
+                const res = await fetch(`${API_URL}/api/backup/preview`);
+                if (!res.ok) throw new Error("Error al consultar el backup");
+
+                currentBackupObject = await res.json();
+                if (viewer) {
+                    viewer.textContent = JSON.stringify(currentBackupObject, null, 2);
+                }
+                renderBackupVisualCards();
+                showToast("Visualización de datos cargada.", "success");
+            } catch (err) {
+                showToast("Error al consultar vista previa.", "danger");
+            }
+        });
+    }
+
+    // 3. Inspeccionar archivo seleccionado antes de restaurar
+    if (backupFileInput) {
+        backupFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (file.name.endsWith('.json')) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        currentBackupObject = JSON.parse(event.target.result);
+                        if (viewer) viewer.textContent = JSON.stringify(currentBackupObject, null, 2);
+                        renderBackupVisualCards();
+                        showToast(`Archivo JSON ${file.name} cargado en el visor visual.`, "info");
+                    } catch (parseErr) {
+                        showToast("Archivo JSON no válido.", "danger");
+                    }
+                };
+                reader.readAsText(file);
+            } else {
+                showToast(`Paquete ZIP ${file.name} listo para restaurar.`, "info");
+            }
+        });
+    }
+
+    // 4. Restaurar Backup (ZIP o JSON)
+    if (btnRestore) {
+        btnRestore.addEventListener('click', async () => {
+            const file = backupFileInput?.files[0];
+            if (!file) {
+                showToast("Por favor selecciona un archivo (.ZIP o .JSON) primero.", "warning");
+                return;
+            }
+
+            if (!confirm(`⚠️ ¿ATENCIÓN: Estás seguro de restaurar el sistema desde ${file.name}? Esta acción actualizará la base de datos y la carpeta de imágenes de productos.`)) {
+                return;
+            }
+
+            try {
+                showToast("Subiendo y restaurando datos e imágenes...");
+                const formData = new FormData();
+                formData.append('backupFile', file);
+
+                const res = await fetch(`${API_URL}/api/backup/restore`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (res.ok) {
+                    showToast("¡Base de datos e imágenes restauradas con éxito!", "success");
+                    alert("✅ La base de datos y todas las imágenes de productos han sido restauradas correctamente. Se actualizará la página.");
+                    location.reload();
+                } else {
+                    const errData = await res.json();
+                    showToast(errData.error || "Error al restaurar la copia de seguridad.", "danger");
+                }
+            } catch (err) {
+                console.error("Error restaurando backup:", err);
+                showToast("Error de conexión al restaurar.", "danger");
+            }
+        });
+    }
+});
 
 // ==========================================
 // TOAST NOTIFICATIONS (TOAST GLOBAL)
@@ -3004,9 +3384,12 @@ function renderCustomerChatModule() {
     if (!container) return;
 
     const session = getCustomerSession();
+    const pendingQuote = sessionStorage.getItem('drakotec_pending_quote_msg');
 
     if (!session) {
         // Formulario de Registro / Identificación Inicial
+        const defaultMsg = pendingQuote || '';
+
         container.innerHTML = `
             <h3>💬 Chat de Atención en Vivo</h3>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Regístrate una sola vez para enviar tus dudas y chatear con soporte en vivo.</p>
@@ -3025,11 +3408,15 @@ function renderCustomerChatModule() {
                 </div>
                 <div class="form-group" style="margin:0;">
                     <label for="chatRegMsg">Tu Consulta Inicial *</label>
-                    <textarea id="chatRegMsg" class="form-input" rows="3" required placeholder="Escribe tu duda sobre un producto o reparación..."></textarea>
+                    <textarea id="chatRegMsg" class="form-input" rows="3" required placeholder="Escribe tu duda sobre un producto o reparación...">${defaultMsg}</textarea>
                 </div>
                 <button type="submit" class="btn btn-primary" style="width: 100%; font-weight: bold; margin-top: 6px;">🚀 Iniciar Chat en Vivo</button>
             </form>
         `;
+
+        if (pendingQuote) {
+            sessionStorage.removeItem('drakotec_pending_quote_msg');
+        }
 
         const regForm = document.getElementById('customerRegisterForm');
         if (regForm) {
@@ -3085,6 +3472,24 @@ function renderCustomerChatModule() {
         // Ventana de Chat Activo del Cliente
         const chats = getLiveChats();
         const customerChat = chats[session.email] || { messages: [] };
+
+        if (pendingQuote) {
+            sessionStorage.removeItem('drakotec_pending_quote_msg');
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            customerChat.messages.push({
+                sender: "client",
+                text: pendingQuote,
+                time: timeStr
+            });
+            customerChat.unreadAdmin = (customerChat.unreadAdmin || 0) + 1;
+            customerChat.lastTime = timeStr;
+            chats[session.email] = customerChat;
+            saveLiveChats(chats);
+            if (typeof broadcastChannel !== 'undefined') {
+                broadcastChannel.postMessage({ type: 'live_chat_updated' });
+            }
+        }
 
         // Marcar mensajes como leídos por el cliente
         if (customerChat.unreadClient > 0) {
