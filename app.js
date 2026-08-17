@@ -2771,11 +2771,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 1. Descargar Backup Completo (.ZIP)
+    // 1. Descargar Backup Completo (.JSON)
     if (btnDownload) {
-        btnDownload.addEventListener('click', () => {
-            showToast("Iniciando descarga de copia de seguridad ZIP...");
-            window.location.href = `${API_URL}/api/backup`;
+        btnDownload.addEventListener('click', async () => {
+            try {
+                showToast("Iniciando descarga de copia de seguridad...");
+                const res = await fetch(`${API_URL}/api/backup`);
+                if (!res.ok) throw new Error("Error al descargar respaldo");
+                
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `drakotec_backup_${new Date().toISOString().slice(0,10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+
+                showToast("¡Copia de seguridad descargada con éxito!", "success");
+            } catch (err) {
+                console.error("Error descargando backup:", err);
+                showToast("Error al descargar la copia de seguridad.", "danger");
+            }
         });
     }
 
