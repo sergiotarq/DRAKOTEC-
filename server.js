@@ -590,6 +590,9 @@ app.get('/api/notificaciones', async (req, res) => {
 // Hilo de verificación automática de reservas vencidas (Cada 30 segundos)
 setInterval(async () => {
     try {
+        // Verificar que la conexión a MongoDB esté lista antes de hacer la consulta
+        if (mongoose.connection.readyState !== 1) return;
+
         const now = new Date();
         const expired = await Reserva.find({ status: 'activa', expiresAt: { $lte: now } });
 
