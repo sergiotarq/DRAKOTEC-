@@ -2771,11 +2771,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 1. Descargar Backup Completo (.JSON)
+    // 1. Descargar Backup Completo (.ZIP)
     if (btnDownload) {
         btnDownload.addEventListener('click', async () => {
             try {
-                showToast("Iniciando descarga de copia de seguridad...");
+                showToast("Generando y empaquetando copia de seguridad ZIP con imágenes...");
                 const res = await fetch(`${API_URL}/api/backup`);
                 if (!res.ok) throw new Error("Error al descargar respaldo");
                 
@@ -2783,15 +2783,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `drakotec_backup_${new Date().toISOString().slice(0,10)}.json`;
+                a.download = `drakotec_full_backup_${new Date().toISOString().slice(0,10)}.zip`;
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
                 window.URL.revokeObjectURL(url);
 
-                showToast("¡Copia de seguridad descargada con éxito!", "success");
+                showToast("¡Backup Completo ZIP descargado con éxito!", "success");
             } catch (err) {
-                console.error("Error descargando backup:", err);
+                console.error("Error descargando backup ZIP:", err);
                 showToast("Error al descargar la copia de seguridad.", "danger");
             }
         });

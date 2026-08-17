@@ -848,12 +848,36 @@ app.get('/api/backup', async (req, res) => {
             }
         };
 
-        const filename = `drakotec_backup_${Date.now()}.json`;
-        res.setHeader('Content-Type', 'application/json');
+        const filename = `drakotec_full_backup_${Date.now()}.zip`;
+        res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
-        res.send(JSON.stringify(backupData, null, 2));
+
+        const archive = archiver('zip', { zlib: { level: 9 } });
+
+        archive.on('error', (err) => {
+            console.error("Error comprimiendo backup:", err);
+            if (!res.headersSent) {
+                res.status(500).send({ error: 'Error al empaquetar copia de seguridad.' });
+            }
+        });
+
+        archive.pipe(res);
+
+        // Añadir archivo JSON de datos
+        archive.append(JSON.stringify(backupData, null, 2), { name: 'backup.json' });
+
+        // Añadir carpeta de imágenes de subidas si existe
+        const uploadsPath = path.join(__dirname, 'public/uploads');
+        try {
+            await fs.access(uploadsPath);
+            archive.directory(uploadsPath, 'uploads');
+        } catch (dirErr) {
+            console.warn("Carpeta de subidas vacía o inaccesible, continuando solo con base de datos:", dirErr.message);
+        }
+
+        await archive.finalize();
     } catch (err) {
-        console.error("Error al exportar backup:", err);
+        console.error("Error al exportar backup ZIP:", err);
         if (!res.headersSent) {
             res.status(500).json({ error: 'Error al generar la copia de seguridad.' });
         }
