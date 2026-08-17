@@ -819,17 +819,40 @@ app.get('/api/backup/preview', async (req, res) => {
     }
 });
 
-// 1. Exportar Backup Completo en ZIP (Datos JSON + Carpeta Uploads con Imágenes)
+// 1. Exportar Backup Completo (Datos JSON + Fotografías en Base64)
 app.get('/api/backup', async (req, res) => {
     try {
-        const productos = await Producto.find({});
+        const productosRaw = await Producto.find({});
         const ordenes = await Orden.find({});
         const reservas = await Reserva.find({});
         const movimientos = await Movimiento.find({});
         const notificaciones = await Notificacion.find({});
 
+        // Convertir productos embebiendo sus imágenes en formato DataURI / Base64
+        const productos = await Promise.all(productosRaw.map(async (prodDoc) => {
+            const prod = prodDoc.toObject();
+            if (Array.isArray(prod.images)) {
+                prod.imagesData = await Promise.all(prod.images.map(async (imgPath) => {
+                    try {
+                        const cleanPath = imgPath.startsWith('/') ? imgPath.slice(1) : imgPath;
+                        const fullPath = path.join(__dirname, cleanPath);
+                        const fileBuffer = await fs.readFile(fullPath);
+                        const ext = path.extname(cleanPath).toLowerCase();
+                        const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
+                        return {
+                            path: imgPath,
+                            base64: `data:${mime};base64,${fileBuffer.toString('base64')}`
+                        };
+                    } catch (e) {
+                        return { path: imgPath, base64: null };
+                    }
+                }));
+            }
+            return prod;
+        }));
+
         const backupData = {
-            version: '1.0',
+            version: '2.0',
             exportedAt: new Date().toISOString(),
             system: 'Drakotec Store',
             summary: {
@@ -848,43 +871,12 @@ app.get('/api/backup', async (req, res) => {
             }
         };
 
-        const tempZipPath = path.join(__dirname, 'public/uploads/temp', `backup_${Date.now()}.zip`);
-        await fs.mkdir(path.dirname(tempZipPath), { recursive: true });
-        
-        const output = require('fs').createWriteStream(tempZipPath);
-        const archive = archiver('zip', { zlib: { level: 9 } });
-
-        output.on('close', () => {
-            res.download(tempZipPath, `drakotec_full_backup_${Date.now()}.zip`, async (err) => {
-                if (err) console.error("Error enviando archivo ZIP:", err);
-                await fs.unlink(tempZipPath).catch(() => {});
-            });
-        });
-
-        archive.on('error', (err) => {
-            console.error("Error comprimiendo backup:", err);
-            if (!res.headersSent) {
-                res.status(500).json({ error: 'Error al empaquetar copia de seguridad.' });
-            }
-        });
-
-        archive.pipe(output);
-
-        // Añadir archivo JSON de datos
-        archive.append(JSON.stringify(backupData, null, 2), { name: 'backup.json' });
-
-        // Añadir carpeta de imágenes de subidas si existe
-        const uploadsPath = path.join(__dirname, 'public/uploads');
-        try {
-            await fs.access(uploadsPath);
-            archive.directory(uploadsPath, 'uploads');
-        } catch (dirErr) {
-            console.warn("Carpeta de subidas vacía o inaccesible, continuando solo con base de datos:", dirErr.message);
-        }
-
-        await archive.finalize();
+        const filename = `drakotec_full_backup_${Date.now()}.json`;
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+        res.json(backupData);
     } catch (err) {
-        console.error("Error al exportar backup ZIP:", err);
+        console.error("Error al exportar backup completo:", err);
         if (!res.headersSent) {
             res.status(500).json({ error: 'Error al generar la copia de seguridad.' });
         }
@@ -937,6 +929,27 @@ app.post('/api/backup/restore', backupUpload.single('backupFile'), async (req, r
         const { productos, ordenes, reservas, movimientos, notificaciones } = backupObj.data;
 
         if (Array.isArray(productos) && productos.length > 0) {
+            await fs.mkdir(path.join(__dirname, 'public/uploads'), { recursive: true });
+            
+            // Recrear archivos de imágenes físicos a partir de Base64 si vienen incluidos
+            for (const prod of productos) {
+                if (Array.isArray(prod.imagesData)) {
+                    for (const imgItem of prod.imagesData) {
+                        if (imgItem && imgItem.path && imgItem.base64) {
+                            try {
+                                const cleanPath = imgItem.path.startsWith('/') ? imgItem.path.slice(1) : imgItem.path;
+                                const destPath = path.join(__dirname, cleanPath);
+                                const base64Data = imgItem.base64.replace(/^data:image\/\w+;base64,/, "");
+                                const buffer = Buffer.from(base64Data, 'base64');
+                                await fs.writeFile(destPath, buffer);
+                            } catch (writeErr) {
+                                console.warn("Error reconstruyendo imagen desde backup:", writeErr.message);
+                            }
+                        }
+                    }
+                }
+            }
+
             await Producto.deleteMany({});
             await Producto.insertMany(productos);
         }
