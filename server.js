@@ -848,20 +848,27 @@ app.get('/api/backup', async (req, res) => {
             }
         };
 
-        const filename = `drakotec_full_backup_${Date.now()}.zip`;
-        res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
-
+        const tempZipPath = path.join(__dirname, 'public/uploads/temp', `backup_${Date.now()}.zip`);
+        await fs.mkdir(path.dirname(tempZipPath), { recursive: true });
+        
+        const output = require('fs').createWriteStream(tempZipPath);
         const archive = archiver('zip', { zlib: { level: 9 } });
+
+        output.on('close', () => {
+            res.download(tempZipPath, `drakotec_full_backup_${Date.now()}.zip`, async (err) => {
+                if (err) console.error("Error enviando archivo ZIP:", err);
+                await fs.unlink(tempZipPath).catch(() => {});
+            });
+        });
 
         archive.on('error', (err) => {
             console.error("Error comprimiendo backup:", err);
             if (!res.headersSent) {
-                res.status(500).send({ error: 'Error al empaquetar copia de seguridad.' });
+                res.status(500).json({ error: 'Error al empaquetar copia de seguridad.' });
             }
         });
 
-        archive.pipe(res);
+        archive.pipe(output);
 
         // Añadir archivo JSON de datos
         archive.append(JSON.stringify(backupData, null, 2), { name: 'backup.json' });
