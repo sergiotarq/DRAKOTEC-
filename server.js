@@ -872,11 +872,12 @@ app.post('/api/backup/restore', backupUpload.single('backupFile'), async (req, r
             if (req.file.originalname.endsWith('.zip') || req.file.mimetype.includes('zip')) {
                 const directory = await unzipper.Open.file(filePath);
                 
-                // Extraer imágenes a public/uploads
+                // Extraer imágenes a public/uploads (creando carpeta si no existe)
+                await fs.mkdir(path.join(__dirname, 'public/uploads'), { recursive: true });
                 for (const file of directory.files) {
                     if (file.path.startsWith('uploads/')) {
                         const targetName = file.path.replace('uploads/', '');
-                        if (targetName) {
+                        if (targetName && targetName !== '.gitkeep') {
                             const destPath = path.join(__dirname, 'public/uploads', targetName);
                             const content = await file.buffer();
                             await fs.writeFile(destPath, content);
