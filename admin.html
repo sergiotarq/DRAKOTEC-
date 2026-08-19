@@ -223,7 +223,7 @@
                                     <th>Dispositivo / IMEI</th>
                                     <th>Falla Declarada</th>
                                     <th>Estado</th>
-                                    <th>Total ($)</th>
+                                    <th>Total (Bs.)</th>
                                     <th>Acciones</th>
                                 </tr>
                             </thead>
@@ -596,31 +596,31 @@
 
                             <form id="cotizadorConfigForm">
                                 <h5 style="color: var(--accent-purple); margin-bottom: 10px;">1. Precios Base por Falla
-                                    (USD/Bs)</h5>
+                                    (Bs)</h5>
                                 <div
                                     style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;">
                                     <div class="form-group">
-                                        <label for="cfgIssueScreen">Pantalla (Base USD)</label>
+                                        <label for="cfgIssueScreen">Pantalla (Base Bs)</label>
                                         <input type="number" id="cfgIssueScreen" class="form-input" min="0" step="1"
                                             required>
                                     </div>
                                     <div class="form-group">
-                                        <label for="cfgIssueBattery">Batería (Base USD)</label>
+                                        <label for="cfgIssueBattery">Batería (Base Bs)</label>
                                         <input type="number" id="cfgIssueBattery" class="form-input" min="0" step="1"
                                             required>
                                     </div>
                                     <div class="form-group">
-                                        <label for="cfgIssuePort">Puerto Carga (Base USD)</label>
+                                        <label for="cfgIssuePort">Puerto Carga (Base Bs)</label>
                                         <input type="number" id="cfgIssuePort" class="form-input" min="0" step="1"
                                             required>
                                     </div>
                                     <div class="form-group">
-                                        <label for="cfgIssueCamera">Cámara (Base USD)</label>
+                                        <label for="cfgIssueCamera">Cámara (Base Bs)</label>
                                         <input type="number" id="cfgIssueCamera" class="form-input" min="0" step="1"
                                             required>
                                     </div>
                                     <div class="form-group">
-                                        <label for="cfgIssueDiag">Diagnóstico (Base USD)</label>
+                                        <label for="cfgIssueDiag">Diagnóstico (Base Bs)</label>
                                         <input type="number" id="cfgIssueDiag" class="form-input" min="0" step="1"
                                             required>
                                     </div>
@@ -874,7 +874,7 @@
             <h3 style="color: #ef4444; margin-bottom: 16px;">💸 Registrar Gasto / Egreso de Caja</h3>
             <form id="formRegistrarGasto">
                 <div class="form-group" style="margin-bottom: 12px;">
-                    <label>Monto ($)</label>
+                    <label>Monto (Bs.)</label>
                     <input type="number" step="0.01" id="gastoMonto" class="form-input" required placeholder="0.00">
                 </div>
                 <div class="form-group" style="margin-bottom: 12px;">
@@ -914,7 +914,7 @@
                 <form id="formEditarMovimiento">
                     <input type="hidden" id="editMovId">
                     <div class="form-group" style="margin-bottom: 12px;">
-                        <label>Monto ($)</label>
+                        <label>Monto (Bs.)</label>
                         <input type="number" step="0.01" id="editMovMonto" class="form-input" required>
                     </div>
                     <div class="form-group" style="margin-bottom: 12px;">

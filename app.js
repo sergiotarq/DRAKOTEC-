@@ -1006,9 +1006,10 @@ async function fetchOrdenes() {
         if (!res.ok) throw new Error("Error al obtener órdenes");
         ordenesList = await res.json();
         
-        const path = window.location.pathname;
-        if (path.endsWith('tecnico.html')) {
+        const path = window.location.pathname.toLowerCase();
+        if (path.endsWith('tecnico.html') || path.endsWith('admin.html')) {
             renderTechOrders();
+            renderSavedOrders();
         }
     } catch (err) {
         console.error(err);
@@ -1516,9 +1517,9 @@ function initTechnicalWorkshopModule() {
         const adj = surcharge - discount;
         const total = Math.max(0, subtotal + adj);
 
-        if (document.getElementById('lblSubtotal')) document.getElementById('lblSubtotal').textContent = `$${subtotal.toFixed(2)}`;
-        if (document.getElementById('lblAdjustments')) document.getElementById('lblAdjustments').textContent = `$${adj.toFixed(2)}`;
-        if (document.getElementById('lblTotalAmount')) document.getElementById('lblTotalAmount').textContent = `$${total.toFixed(2)}`;
+        if (document.getElementById('lblSubtotal')) document.getElementById('lblSubtotal').textContent = `${subtotal.toLocaleString('es-BO', {minimumFractionDigits: 2})} Bs.`;
+        if (document.getElementById('lblAdjustments')) document.getElementById('lblAdjustments').textContent = `${adj.toLocaleString('es-BO', {minimumFractionDigits: 2})} Bs.`;
+        if (document.getElementById('lblTotalAmount')) document.getElementById('lblTotalAmount').textContent = `${total.toLocaleString('es-BO', {minimumFractionDigits: 2})} Bs.`;
     }
 
     // 7. Guardar Orden
@@ -1573,20 +1574,30 @@ function initTechnicalWorkshopModule() {
 
             // Enviar backend API
             try {
-                await fetch(`${API_URL}/api/ordenes`, {
+                const response = await fetch(`${API_URL}/api/ordenes`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(newOrder)
                 });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.orden && data.orden.code) {
+                        if (document.getElementById('currentOrdCode')) {
+                            document.getElementById('currentOrdCode').textContent = data.orden.code;
+                        }
+                    }
+                }
             } catch (e) {
-                console.log("Nota: Guardado en memoria activa.");
+                console.log("Nota: Guardado local en caso de desconexión.", e);
             }
+
+            await fetchOrdenes();
 
             // Notificar en tiempo real a todas las instancias (Técnico y Admin)
             broadcastChannel.postMessage({ type: 'order_updated' });
             localStorage.setItem('drakotec_last_order_update', Date.now().toString());
 
-            showToast(`✅ Orden ${code} guardada con éxito.`);
+            showToast(`✅ Orden guardada con éxito.`);
             renderSavedOrders();
             renderTechOrders();
         });
@@ -1771,7 +1782,7 @@ function renderSavedOrders() {
             const o = ordenesList.find(item => item.code === code);
             if (o && o.phone) {
                 const cleanPhone = o.phone.replace(/[^0-9]/g, '');
-                const msg = `Hola *${o.client}*, tu equipo *${o.brandModel}* (Orden *${o.code}*) está en estado: *${o.status.toUpperCase()}*. Total: $${(o.total || 0).toFixed(2)}. ¡Saludos, Drakotec!`;
+                const msg = `Hola *${o.client}*, tu equipo *${o.brandModel}* (Orden *${o.code}*) está en estado: *${o.status.toUpperCase()}*. Total: ${(o.total || 0).toLocaleString('es-BO', {minimumFractionDigits: 2})} Bs. ¡Saludos, Drakotec!`;
                 window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
             }
         });

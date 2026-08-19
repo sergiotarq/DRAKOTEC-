@@ -384,10 +384,14 @@ app.get('/api/ordenes', async (req, res) => {
     }
 });
 
-// Crear una orden (TEC-A01 - Rol: Técnico)
+// Crear o actualizar una orden (Rol: Técnico / Admin)
 app.post('/api/ordenes', async (req, res) => {
     try {
-        const { client, brandModel, issues, accessories } = req.body;
+        const { 
+            code, client, phone, deviceType, brandModel, imei, 
+            physicalState, accessories, issues, pattern, pin, status, 
+            laborCost, partsCost, discount, surcharge, total 
+        } = req.body;
 
         // Validación estricta en el servidor
         const errors = [];
@@ -399,37 +403,47 @@ app.post('/api/ordenes', async (req, res) => {
             return res.status(400).json({ errors });
         }
 
-        const code = await generateUniqueCode();
+        const targetCode = (code && code.trim() !== '') ? code.trim() : await generateUniqueCode();
 
-        const nuevaOrden = new Orden({
-            code,
+        const orderData = {
+            code: targetCode,
             client: client.trim(),
+            phone: phone ? phone.trim() : '',
+            deviceType: deviceType || 'Celular',
             brandModel: brandModel.trim(),
-            issues: issues.trim(),
+            imei: imei ? imei.trim() : '',
+            physicalState: physicalState || 'Rayones leves',
             accessories: accessories ? accessories.trim() : "Ninguno",
-            status: "recibido", // Estado inicial
+            issues: issues.trim(),
+            pattern: pattern || 'Sin Patrón',
+            pin: pin || 'Sin PIN',
+            status: status || 'recibido',
+            laborCost: Number(laborCost) || 0,
+            partsCost: Number(partsCost) || 0,
+            discount: Number(discount) || 0,
+            surcharge: Number(surcharge) || 0,
+            total: Number(total) || 0,
             createdAt: new Date()
-        });
+        };
 
-        await nuevaOrden.save();
+        const orden = await Orden.findOneAndUpdate(
+            { code: targetCode },
+            { $set: orderData },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
+        );
 
-        res.status(201).json({ message: 'Orden técnica registrada con éxito', orden: nuevaOrden });
+        res.status(201).json({ message: 'Orden técnica registrada/actualizada con éxito', orden });
     } catch (err) {
-        console.error(err);
+        console.error("Error al guardar la orden:", err);
         res.status(500).json({ error: 'Error interno al registrar la orden' });
     }
 });
 
-// Actualizar el estado de una orden
+// Actualizar una orden existente (parcial o completa)
 app.put('/api/ordenes/:code', async (req, res) => {
     try {
         const code = req.params.code.toUpperCase();
-        const { status } = req.body;
-
-        const allowedStatus = ['recibido', 'diagnostico', 'reparacion', 'listo'];
-        if (!status || !allowedStatus.includes(status)) {
-            return res.status(400).json({ error: 'Estado inválido' });
-        }
+        const updateData = req.body;
 
         const orden = await Orden.findOne({ code });
 
@@ -437,12 +451,12 @@ app.put('/api/ordenes/:code', async (req, res) => {
             return res.status(404).json({ error: 'Orden no encontrada' });
         }
 
-        orden.status = status;
+        Object.assign(orden, updateData);
         await orden.save();
 
-        res.json({ message: 'Estado de orden actualizado', orden });
+        res.json({ message: 'Orden actualizada', orden });
     } catch (err) {
-        console.error(err);
+        console.error("Error al actualizar la orden:", err);
         res.status(500).json({ error: 'Error interno al actualizar la orden' });
     }
 });
